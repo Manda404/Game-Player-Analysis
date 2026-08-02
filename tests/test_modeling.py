@@ -69,7 +69,13 @@ def test_saved_bundle_keeps_ordered_feature_contract(tmp_path, player_frame):
         make_group_folds(player_frame, n_splits=2),
         models={"Small tree": DecisionTreeRegressor(max_depth=2, random_state=42)},
     )[0]
-    save_model_bundle(model, X.columns, benchmark, output_dir=tmp_path)
+    save_model_bundle(
+        model,
+        X.columns,
+        benchmark,
+        output_dir=tmp_path,
+        source_fingerprints={"train": "synthetic", "test": "synthetic"},
+    )
     loaded, manifest = load_model_bundle(tmp_path)
     assert loaded.predict(X).shape == (len(X),)
     assert manifest["features"] == list(X.columns)

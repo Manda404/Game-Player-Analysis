@@ -12,6 +12,7 @@ from game_player_analysis.data import (
     load_train_test,
     match_structure_summary,
     raw_data_fingerprints,
+    sha256_file,
     validate_dataset,
 )
 
@@ -21,23 +22,35 @@ def test_train_and_test_schema_are_explicit(player_frame):
     validate_dataset(player_frame.drop(columns=TARGET), require_target=False)
 
 
-def test_raw_data_fingerprints_protect_sources():
-    assert raw_data_fingerprints() == {
-        "train": "66ab317bb5fcc0df0e248127a25159f1dff9c3b8b16058281ecd6107b067f69b",
-        "test": "4dd388277253326c4155a8c87abac19fa4a70339675af9e4682affe4c1345956",
+def test_raw_data_fingerprints_protect_explicit_sources(tmp_path, player_frame):
+    train_path = tmp_path / "train.csv"
+    test_path = tmp_path / "test.csv"
+    player_frame.to_csv(train_path, sep=";", index=False)
+    player_frame.drop(columns=TARGET).to_csv(test_path, sep=";", index=False)
+
+    assert raw_data_fingerprints(train_path, test_path) == {
+        "train": sha256_file(train_path),
+        "test": sha256_file(test_path),
     }
 
 
-def test_official_files_load_and_support_documented_summaries():
-    train, test = load_train_test()
+def test_uploaded_files_load_and_support_documented_summaries(tmp_path, player_frame):
+    train_path = tmp_path / "train.csv"
+    test_path = tmp_path / "test.csv"
+    test_frame = player_frame.drop(columns=TARGET).copy()
+    test_frame["gameId"] = [f"{index + 100:014x}" for index in range(len(test_frame))]
+    player_frame.to_csv(train_path, sep=";", index=False)
+    test_frame.to_csv(test_path, sep=";", index=False)
+
+    train, test = load_train_test(train_path, test_path)
     summary = dataset_summary(train)
     structure = match_structure_summary(train)
     shift = distribution_shift_summary(train, test, ["walkDist", "kills"])
     modes = game_mode_summary(train)
 
-    assert (len(train), len(test)) == (50_000, 5_000)
-    assert summary[["rows", "columns", "has_target"]].tolist() == [50_000, 30, True]
-    assert structure["max_observed_rows_per_game"] == 8
+    assert (len(train), len(test)) == (len(player_frame), len(test_frame))
+    assert summary[["rows", "columns", "has_target"]].tolist() == [len(player_frame), 30, True]
+    assert structure["max_observed_rows_per_game"] == 2
     assert set(shift.index) == {"walkDist", "kills"}
     assert modes["rows"].sum() == len(train)
     assert set(modes.index) == {"solo", "duo", "squad", "special"}

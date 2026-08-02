@@ -26,6 +26,7 @@ def _save_test_bundle(tmp_path, player_frame):
         output_dir=tmp_path,
         model_name="Small tree",
         training_rows=len(player_frame),
+        source_fingerprints={"train": "synthetic", "test": "synthetic"},
     )
     return tmp_path / "model.joblib"
 

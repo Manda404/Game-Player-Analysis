@@ -594,8 +594,14 @@ def save_model_bundle(
     validation_strategy: str = f"{N_SPLITS}-fold GroupKFold(gameId)",
     training_rows: int | None = None,
     postprocessing: str = "clip_[0,1]_and_snap_to_maxRank_grid",
+    source_fingerprints: Mapping[str, str] | None = None,
 ) -> dict[str, Path]:
-    """Publish one aligned model, benchmark and manifest."""
+    """Publish one aligned model, benchmark and manifest.
+
+    ``source_fingerprints`` is optional for callers that train from an
+    in-memory, non-versioned dataset. The production pipeline omits it and
+    fingerprints the official raw files as before.
+    """
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     model_path = destination / "model.joblib"
@@ -615,7 +621,11 @@ def save_model_bundle(
         "postprocessing": postprocessing,
         "feature_count": len(features),
         "features": list(features),
-        "raw_data_sha256": raw_data_fingerprints(),
+        "raw_data_sha256": _json_compatible(
+            dict(source_fingerprints)
+            if source_fingerprints is not None
+            else raw_data_fingerprints()
+        ),
         "random_state": RANDOM_STATE,
         "training_rows": training_rows,
         "model_parameters": _json_compatible(model.get_params(deep=False)),

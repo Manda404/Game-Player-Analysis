@@ -19,6 +19,3 @@ htmlcov/
 
 # Local source datasets (see README.md)
 data/raw/*.csv
-
-# Local pre-refactoring archives
-dist/*.zip

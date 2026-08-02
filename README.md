@@ -109,7 +109,7 @@ Les décisions détaillées sont dans
 [`docs/final_report.md`](docs/final_report.md) et
 [`docs/refactoring/`](docs/refactoring/). `docs.old/` reste l'archive intacte
 de la première analyse. L'état complet pré-refactoring reste récupérable dans
-l'archive locale non versionnée `dist/pre_refactor_2026-08-02.zip`.
+l'archive versionnée `dist/pre_refactor_2026-08-02.zip`.
 
 ## Limites et suite
 

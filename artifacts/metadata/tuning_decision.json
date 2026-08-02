@@ -1,0 +1,17 @@
+{
+  "accepted": false,
+  "baseline_mae": 0.061649869523092905,
+  "best_parameters": {
+    "colsample_bytree": 1.0,
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "min_child_weight": 1,
+    "n_estimators": 500,
+    "reg_alpha": 0.1,
+    "reg_lambda": 10.0,
+    "subsample": 1.0
+  },
+  "best_tuned_mae": 0.06176684633678584,
+  "mae_gain": -0.00011697681369293722,
+  "minimum_material_gain": 0.0001
+}

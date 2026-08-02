@@ -1,0 +1,11 @@
+,value
+target_mean,0.47233253599999997
+target_median,0.45785
+target_std,0.30744931700600553
+target_zero_rows,2450.0
+target_one_rows,1430.0
+unique_target_values,1445.0
+grid_distance_median,0.0007999999999999119
+grid_distance_p95,0.003199999999992542
+grid_distance_max,0.0049999999999954525
+rows_within_0.0001_of_grid,10380.0

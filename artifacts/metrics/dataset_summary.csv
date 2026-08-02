@@ -1,0 +1,10 @@
+,train,test
+rows,50000,5000
+columns,30,29
+matches,30983,4431
+game_modes,16,10
+missing_cells,0,0
+exact_duplicates,0,0
+date_min,2024-01-01 00:00:00,2024-05-01 00:00:00
+date_max,2024-04-30 00:00:00,2024-05-31 00:00:00
+has_target,True,False

@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
+import math
+import platform
 import time
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -15,20 +20,46 @@ from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 from sklearn.base import RegressorMixin, clone
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import ParameterSampler
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 
-from game_player_analysis.config import ARTIFACT_DIR, RANDOM_STATE
-from game_player_analysis.data import raw_data_fingerprints
+from game_player_analysis.config import ARTIFACT_DIR, N_SPLITS, RANDOM_STATE, TARGET
+from game_player_analysis.data import raw_data_fingerprints, sha256_file
 from game_player_analysis.evaluation import overfitting_comment, regression_metrics
 
 FoldIndices = Sequence[tuple[np.ndarray, np.ndarray]]
+logger = logging.getLogger(__name__)
+
+BASELINE_MODEL_NAMES = (
+    "Mean baseline",
+    "Median baseline",
+    "Linear Ridge baseline",
+)
+
+XGBOOST_TUNING_SPACE: dict[str, list[Any]] = {
+    "n_estimators": [300, 500, 700],
+    "learning_rate": [0.03, 0.05, 0.08],
+    "max_depth": [4, 6, 8],
+    "min_child_weight": [1, 3, 5],
+    "subsample": [0.75, 0.85, 1.0],
+    "colsample_bytree": [0.75, 0.85, 1.0],
+    "reg_alpha": [0.0, 0.1, 0.5],
+    "reg_lambda": [1.0, 5.0, 10.0],
+}
 
 
 def build_model_candidates(
     random_state: int = RANDOM_STATE,
 ) -> dict[str, RegressorMixin]:
-    """Return the four tree ensembles requested by the assignment."""
+    """Return one linear baseline and four tree-ensemble candidates."""
     return {
+        "Linear Ridge baseline": make_pipeline(
+            StandardScaler(),
+            Ridge(alpha=1.0),
+        ),
         "Random Forest": RandomForestRegressor(
             n_estimators=250,
             min_samples_leaf=2,
@@ -77,13 +108,17 @@ def _baseline_evaluation(
     y: pd.Series,
     folds: FoldIndices,
     feature_count: int,
+    *,
+    statistic: str,
 ) -> tuple[dict[str, Any], np.ndarray, pd.DataFrame]:
+    if statistic not in {"mean", "median"}:
+        raise ValueError("Baseline statistic must be 'mean' or 'median'")
     oof = np.full(len(y), np.nan)
     rows = []
     for fold, (train_index, validation_index) in enumerate(folds, start=1):
-        median = float(y.iloc[train_index].median())
-        train_prediction = np.full(len(train_index), median)
-        validation_prediction = np.full(len(validation_index), median)
+        reference = float(getattr(y.iloc[train_index], statistic)())
+        train_prediction = np.full(len(train_index), reference)
+        validation_prediction = np.full(len(validation_index), reference)
         oof[validation_index] = validation_prediction
         rows.append(
             {
@@ -95,8 +130,9 @@ def _baseline_evaluation(
             }
         )
     detail = pd.DataFrame(rows)
+    model_name = f"{statistic.title()} baseline"
     summary = {
-        "model": "Median baseline",
+        "model": model_name,
         "mae": detail["mae"].mean(),
         "mae_std": detail["mae"].std(ddof=1),
         "rmse": detail["rmse"].mean(),
@@ -170,10 +206,27 @@ def compare_models(
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray], dict[str, pd.DataFrame]]:
     """Compare one baseline and all candidate families on identical folds."""
     candidates = dict(models or build_model_candidates())
-    baseline, baseline_oof, baseline_detail = _baseline_evaluation(y, folds, X.shape[1])
-    summaries = [baseline]
-    predictions = {"Median baseline": baseline_oof}
-    details = {"Median baseline": baseline_detail}
+    mean_baseline, mean_oof, mean_detail = _baseline_evaluation(
+        y,
+        folds,
+        X.shape[1],
+        statistic="mean",
+    )
+    median_baseline, median_oof, median_detail = _baseline_evaluation(
+        y,
+        folds,
+        X.shape[1],
+        statistic="median",
+    )
+    summaries = [mean_baseline, median_baseline]
+    predictions = {
+        "Mean baseline": mean_oof,
+        "Median baseline": median_oof,
+    }
+    details = {
+        "Mean baseline": mean_detail,
+        "Median baseline": median_detail,
+    }
     for name, estimator in candidates.items():
         summary, oof, detail = cross_validate_model(name, estimator, X, y, folds)
         summaries.append(summary)
@@ -182,6 +235,171 @@ def compare_models(
     results = pd.DataFrame(summaries).sort_values("mae").reset_index(drop=True)
     results.insert(0, "rank", np.arange(1, len(results) + 1))
     return results, predictions, details
+
+
+def paired_fold_uncertainty(
+    fold_details: Mapping[str, pd.DataFrame],
+    reference_model: str,
+    *,
+    bootstrap_samples: int = 10_000,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """Bootstrap paired fold-MAE differences against one reference model.
+
+    A positive difference means the candidate has a higher MAE than the
+    reference. Five folds provide limited inferential power, so the interval is
+    reported as a descriptive uncertainty diagnostic, not a hypothesis test.
+    """
+    if reference_model not in fold_details:
+        raise ValueError(f"Unknown reference model: {reference_model}")
+    reference = fold_details[reference_model].set_index("fold")["mae"]
+    random = np.random.default_rng(random_state)
+    rows: list[dict[str, Any]] = []
+    for model_name, detail in fold_details.items():
+        if model_name == reference_model:
+            continue
+        candidate = detail.set_index("fold")["mae"]
+        paired = candidate.to_frame("candidate").join(reference.rename("reference"))
+        if paired.isna().any().any() or len(paired) != len(reference):
+            raise ValueError(f"Fold alignment differs for model: {model_name}")
+        differences = (paired["candidate"] - paired["reference"]).to_numpy()
+        samples = random.choice(
+            differences,
+            size=(bootstrap_samples, len(differences)),
+            replace=True,
+        ).mean(axis=1)
+        rows.append(
+            {
+                "reference_model": reference_model,
+                "candidate_model": model_name,
+                "folds": len(differences),
+                "mean_mae_difference": float(differences.mean()),
+                "ci95_lower": float(np.quantile(samples, 0.025)),
+                "ci95_upper": float(np.quantile(samples, 0.975)),
+                "candidate_worse_folds": int((differences > 0).sum()),
+            }
+        )
+    return pd.DataFrame(rows).sort_values("mean_mae_difference").reset_index(drop=True)
+
+
+def evaluate_holdout_strategies(
+    estimator: RegressorMixin,
+    X: pd.DataFrame,
+    y: pd.Series,
+    splits: Mapping[str, tuple[np.ndarray, np.ndarray]],
+) -> pd.DataFrame:
+    """Fit one reference model on competing holdout strategies."""
+    rows: list[dict[str, Any]] = []
+    for strategy, (train_index, validation_index) in splits.items():
+        model = clone(estimator)
+        start = time.perf_counter()
+        model.fit(X.iloc[train_index], y.iloc[train_index])
+        fit_seconds = time.perf_counter() - start
+        train_prediction = np.clip(model.predict(X.iloc[train_index]), 0.0, 1.0)
+        start = time.perf_counter()
+        validation_prediction = np.clip(
+            model.predict(X.iloc[validation_index]),
+            0.0,
+            1.0,
+        )
+        predict_seconds = time.perf_counter() - start
+        train_metrics = regression_metrics(y.iloc[train_index], train_prediction)
+        validation_metrics = regression_metrics(
+            y.iloc[validation_index],
+            validation_prediction,
+        )
+        rows.append(
+            {
+                "strategy": strategy,
+                "train_rows": len(train_index),
+                "validation_rows": len(validation_index),
+                "train_mae": train_metrics["mae"],
+                **validation_metrics,
+                "fit_seconds": fit_seconds,
+                "predict_seconds": predict_seconds,
+            }
+        )
+    return pd.DataFrame(rows).set_index("strategy")
+
+
+def evaluate_feature_sets(
+    estimator: RegressorMixin,
+    X: pd.DataFrame,
+    y: pd.Series,
+    folds: FoldIndices,
+    feature_sets: Mapping[str, Sequence[str]],
+) -> pd.DataFrame:
+    """Evaluate an ordered, progressive feature-family ablation."""
+    rows: list[dict[str, Any]] = []
+    for stage, features in feature_sets.items():
+        missing = set(features).difference(X.columns)
+        if missing:
+            raise ValueError(f"Ablation stage '{stage}' is missing: {sorted(missing)}")
+        summary, _, _ = cross_validate_model(
+            stage,
+            estimator,
+            X.loc[:, list(features)],
+            y,
+            folds,
+        )
+        rows.append({"stage": stage, **summary})
+    result = pd.DataFrame(rows)
+    result["mae_gain_vs_previous"] = -result["mae"].diff()
+    return result
+
+
+def randomized_model_search(
+    estimator: RegressorMixin,
+    X: pd.DataFrame,
+    y: pd.Series,
+    folds: FoldIndices,
+    parameter_space: Mapping[str, Sequence[Any]],
+    *,
+    n_iter: int = 8,
+    random_state: int = RANDOM_STATE,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Run a bounded, reproducible manual randomized search.
+
+    The function reuses the project's clipped prediction and metric logic. It
+    returns every trial so the absence of a meaningful gain is as traceable as
+    a winning configuration.
+    """
+    rows: list[dict[str, Any]] = []
+    samples = list(
+        ParameterSampler(
+            dict(parameter_space),
+            n_iter=n_iter,
+            random_state=random_state,
+        )
+    )
+    for trial, parameters in enumerate(samples, start=1):
+        candidate = clone(estimator).set_params(**parameters)
+        summary, _, _ = cross_validate_model(
+            f"trial_{trial}",
+            candidate,
+            X,
+            y,
+            folds,
+        )
+        rows.append(
+            {
+                "trial": trial,
+                **parameters,
+                **{key: value for key, value in summary.items() if key != "model"},
+            }
+        )
+        logger.info("Tuning trial %d/%d: MAE %.6f", trial, len(samples), summary["mae"])
+    results = pd.DataFrame(rows).sort_values("mae").reset_index(drop=True)
+    parameter_names = list(parameter_space)
+    best_parameters = {
+        name: (
+            results.loc[0, name].item()
+            if hasattr(results.loc[0, name], "item")
+            else results.loc[0, name]
+        )
+        for name in parameter_names
+    }
+    return results, best_parameters
 
 
 def fit_final_model(
@@ -200,12 +418,44 @@ def fit_final_model(
     return model
 
 
+def _runtime_versions() -> dict[str, str]:
+    """Return the small dependency fingerprint needed to reuse a model."""
+    packages = ("numpy", "pandas", "scikit-learn", "xgboost", "lightgbm", "catboost")
+    versions = {"python": platform.python_version()}
+    for package in packages:
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:  # pragma: no cover - core dependencies are installed
+            versions[package] = "not-installed"
+    return versions
+
+
+def _json_compatible(value: Any) -> Any:
+    """Convert estimator metadata to strict, portable JSON values."""
+    if isinstance(value, Mapping):
+        return {str(key): _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, np.generic):
+        return _json_compatible(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 def save_model_bundle(
     model: RegressorMixin,
     features: Sequence[str],
     benchmark: pd.DataFrame,
     *,
     output_dir: str | Path = ARTIFACT_DIR,
+    model_name: str | None = None,
+    metrics: Mapping[str, Any] | None = None,
+    validation_strategy: str = f"{N_SPLITS}-fold GroupKFold(gameId)",
+    training_rows: int | None = None,
+    postprocessing: str = "clip_[0,1]_and_snap_to_maxRank_grid",
 ) -> dict[str, Path]:
     """Publish one aligned model, benchmark and manifest."""
     destination = Path(output_dir)
@@ -216,15 +466,29 @@ def save_model_bundle(
     joblib.dump(model, model_path)
     benchmark.to_csv(benchmark_path, index=False)
     manifest = {
+        "artifact_version": 2,
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "model_name": model_name or type(model).__name__,
         "model_class": type(model).__name__,
+        "target": TARGET,
+        "scenario": "post_match_with_killRank",
+        "primary_metric": "MAE",
+        "validation_strategy": validation_strategy,
+        "postprocessing": postprocessing,
         "feature_count": len(features),
         "features": list(features),
         "raw_data_sha256": raw_data_fingerprints(),
         "random_state": RANDOM_STATE,
+        "training_rows": training_rows,
+        "model_parameters": _json_compatible(model.get_params(deep=False)),
+        "metrics": _json_compatible(dict(metrics or {})),
+        "runtime": _runtime_versions(),
         "benchmark": benchmark_path.name,
     }
+    manifest["model_sha256"] = sha256_file(model_path)
     manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(manifest, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
     )
     return {"model": model_path, "benchmark": benchmark_path, "manifest": manifest_path}
 
@@ -238,4 +502,7 @@ def load_model_bundle(
     model = joblib.load(source / "model.joblib")
     if int(manifest["feature_count"]) != len(manifest["features"]):
         raise ValueError("The saved feature count and ordered schema disagree")
+    expected_hash = manifest.get("model_sha256")
+    if expected_hash and sha256_file(source / "model.joblib") != expected_hash:
+        raise ValueError("The saved model checksum does not match the manifest")
     return model, manifest

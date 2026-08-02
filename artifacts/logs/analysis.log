@@ -1,0 +1,12 @@
+2026-08-02T09:18:04 | INFO | game_player_analysis.pipeline | Loading and validating official train/test files
+2026-08-02T09:18:08 | INFO | game_player_analysis.pipeline | Benchmarking baselines and four ensemble families
+2026-08-02T09:19:53 | INFO | game_player_analysis.pipeline | Running bounded XGBoost tuning (6 trials)
+2026-08-02T09:19:59 | INFO | game_player_analysis.modeling | Tuning trial 1/6: MAE 0.063113
+2026-08-02T09:20:07 | INFO | game_player_analysis.modeling | Tuning trial 2/6: MAE 0.061767
+2026-08-02T09:20:13 | INFO | game_player_analysis.modeling | Tuning trial 3/6: MAE 0.063041
+2026-08-02T09:20:17 | INFO | game_player_analysis.modeling | Tuning trial 4/6: MAE 0.064790
+2026-08-02T09:20:22 | INFO | game_player_analysis.modeling | Tuning trial 5/6: MAE 0.062027
+2026-08-02T09:20:26 | INFO | game_player_analysis.modeling | Tuning trial 6/6: MAE 0.064972
+2026-08-02T09:20:34 | INFO | game_player_analysis.pipeline | Auditing feature families, splits, errors and interpretability
+2026-08-02T09:22:35 | INFO | game_player_analysis.pipeline | Fitting and publishing XGBoost
+2026-08-02T09:22:37 | INFO | game_player_analysis.pipeline | Analysis complete: MAE 0.061650

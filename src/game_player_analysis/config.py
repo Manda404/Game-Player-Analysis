@@ -8,6 +8,10 @@ TRAIN_PATH = RAW_DATA_DIR / "train.csv"
 TEST_PATH = RAW_DATA_DIR / "test.csv"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 ARTIFACT_DIR = PROJECT_ROOT / "artifacts"
+METRICS_DIR = ARTIFACT_DIR / "metrics"
+FIGURES_DIR = ARTIFACT_DIR / "figures"
+METADATA_DIR = ARTIFACT_DIR / "metadata"
+LOG_DIR = ARTIFACT_DIR / "logs"
 
 TARGET = "winRankPercentage"
 ID_COLUMNS = ("playerId", "teamId", "gameId")

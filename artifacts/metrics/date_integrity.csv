@@ -1,0 +1,3 @@
+dataset,rows,valid_game_ids,games,multirow_games,multirow_games_with_multiple_dates_pct,median_within_game_span_days,p95_within_game_span_days,max_within_game_span_days,date_min,date_max,unique_dates
+train,50000,49907,30927,13464,100.0,45.02693053860533,99.528734574684,119.30264605291666,2024-01-01,2024-04-30,50000
+test,5000,4990,4425,521,100.0,9.067813562708332,22.930586117222223,28.94978995798611,2024-05-01,2024-05-31,5000

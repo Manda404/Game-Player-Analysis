@@ -1,0 +1,3 @@
+dataset,games,mean_observed_players_per_game,max_observed_players_per_game,observed_game_teams,singleton_team_pct,rows_with_observed_teammate_pct
+train,30983,1.6137882064357874,8,49411,98.8241484689644,2.34
+test,4431,1.128413450688332,4,4974,99.47728186570166,1.04

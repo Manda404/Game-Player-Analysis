@@ -1,5 +1,7 @@
 {
+  "artifact_version": 2,
   "benchmark": "model_comparison.csv",
+  "created_at_utc": "2026-08-02T07:39:16.494763+00:00",
   "feature_count": 16,
   "features": [
     "killRank",
@@ -19,10 +21,73 @@
     "mode_duo",
     "mode_squad"
   ],
+  "metrics": {
+    "mae": 0.061649869523092905,
+    "r2": 0.9203001885629796,
+    "rmse": 0.08679562535567234
+  },
   "model_class": "XGBRegressor",
+  "model_name": "XGBoost",
+  "model_parameters": {
+    "base_score": null,
+    "booster": null,
+    "callbacks": null,
+    "colsample_bylevel": null,
+    "colsample_bynode": null,
+    "colsample_bytree": 0.85,
+    "device": null,
+    "early_stopping_rounds": null,
+    "enable_categorical": false,
+    "eval_metric": null,
+    "feature_types": null,
+    "gamma": null,
+    "grow_policy": null,
+    "importance_type": null,
+    "interaction_constraints": null,
+    "learning_rate": 0.05,
+    "max_bin": null,
+    "max_cat_threshold": null,
+    "max_cat_to_onehot": null,
+    "max_delta_step": null,
+    "max_depth": 6,
+    "max_leaves": null,
+    "min_child_weight": 3,
+    "missing": null,
+    "monotone_constraints": null,
+    "multi_strategy": null,
+    "n_estimators": 500,
+    "n_jobs": -1,
+    "num_parallel_tree": null,
+    "objective": "reg:squarederror",
+    "random_state": 42,
+    "reg_alpha": null,
+    "reg_lambda": null,
+    "sampling_method": null,
+    "scale_pos_weight": null,
+    "subsample": 0.85,
+    "tree_method": null,
+    "validate_parameters": null,
+    "verbosity": 0
+  },
+  "model_sha256": "3e96c6bba7a1a2318c84f154caf793f15f0d234d1ab8682406dd47cba08436b3",
+  "postprocessing": "clip_[0,1]_and_snap_to_maxRank_grid",
+  "primary_metric": "MAE",
   "random_state": 42,
   "raw_data_sha256": {
     "test": "4dd388277253326c4155a8c87abac19fa4a70339675af9e4682affe4c1345956",
     "train": "66ab317bb5fcc0df0e248127a25159f1dff9c3b8b16058281ecd6107b067f69b"
-  }
+  },
+  "runtime": {
+    "catboost": "1.2.10",
+    "lightgbm": "4.7.0",
+    "numpy": "2.5.1",
+    "pandas": "2.3.3",
+    "python": "3.14.1",
+    "scikit-learn": "1.9.0",
+    "xgboost": "2.1.4"
+  },
+  "scenario": "post_match_with_killRank",
+  "target": "winRankPercentage",
+  "training_rows": 50000,
+  "validation_strategy": "5-fold GroupKFold(gameId)"
 }

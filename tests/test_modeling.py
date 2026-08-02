@@ -13,7 +13,12 @@ from game_player_analysis.evaluation import (
     snap_to_rank_grid,
 )
 from game_player_analysis.features import build_model_features
-from game_player_analysis.modeling import compare_models, load_model_bundle, save_model_bundle
+from game_player_analysis.modeling import (
+    compare_models,
+    load_model_bundle,
+    paired_fold_uncertainty,
+    save_model_bundle,
+)
 from game_player_analysis.validation import make_group_folds
 from game_player_analysis.visualization import (
     apply_style,
@@ -33,9 +38,14 @@ def test_comparison_returns_baseline_and_one_shared_model(player_frame):
         folds,
         models={"Small tree": DecisionTreeRegressor(max_depth=2, random_state=42)},
     )
-    assert set(results["model"]) == {"Median baseline", "Small tree"}
-    assert set(predictions) == set(details) == {"Median baseline", "Small tree"}
+    expected = {"Mean baseline", "Median baseline", "Small tree"}
+    assert set(results["model"]) == expected
+    assert set(predictions) == set(details) == expected
     assert all(len(values) == len(player_frame) for values in predictions.values())
+
+    uncertainty = paired_fold_uncertainty(details, "Small tree", bootstrap_samples=100)
+    assert set(uncertainty["candidate_model"]) == {"Mean baseline", "Median baseline"}
+    assert uncertainty["folds"].eq(2).all()
 
 
 def test_rank_grid_and_submission_are_bounded(player_frame):

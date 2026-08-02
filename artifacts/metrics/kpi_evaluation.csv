@@ -1,0 +1,8 @@
+kpi,formula,defined_pct,mean,median,p95,zero_pct_among_defined,spearman_target,most_redundant_source,max_abs_source_spearman,model_decision
+total_distance,walkDist + rideDist + swimDist,100.0,1761.9073293019999,792.0,6430.049999999996,2.136,0.8321472425714856,walkDist,0.9430672811935867,analytic_only_redundant
+mobility_per_match_second,total_distance / gameTime,100.0,1.074005180920542,0.5106716422477631,3.5199434862467682,2.136,0.8481230124220818,total_distance,0.9941935534990234,analytic_only_match_time_not_survival
+damage_per_kill_kpi,damages / kills; 0 when kills=0,100.0,53.572314473596975,0.0,190.6,57.072,0.36944270092506926,kills,0.890303324881677,candidate_requires_ablation
+headshot_ratio,headshots / kills; undefined when kills=0,43.034,0.23604070462522797,0.0,1.0,61.02616535762421,0.10637763305866531,headshots,0.9429950181402349,analytic_only_sparse
+combat_activity_kpi,kills + assists + knocks,100.0,1.80956,1.0,7.0,45.467999999999996,0.4297526677712104,kills,0.9001593276752026,candidate_requires_ablation
+resource_activity_kpi,weapons + upgrades + heals,100.0,6.1459,5.0,17.0,5.078,0.7713659755157186,weapons,0.8619826155835533,candidate_requires_ablation
+support_actions,assists + revives,100.0,0.39694,0.0,2.0,74.168,0.36354766578594144,assists,0.7948258251002429,analytic_only_mode_dependent

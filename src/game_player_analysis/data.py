@@ -133,7 +133,7 @@ def game_mode_summary(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def match_structure_summary(frame: pd.DataFrame) -> pd.Series:
-    """Summarize sparse match/team coverage and pseudo-date semantics."""
+    """Summarize sparse coverage and within-game date inconsistencies."""
     rows_per_game = frame.groupby("gameId").size()
     rows_per_team = frame.groupby(["gameId", "teamId"]).size()
     multirow_games = rows_per_game[rows_per_game.gt(1)].index

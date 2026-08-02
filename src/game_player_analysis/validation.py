@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit, train_test_split
 
-from game_player_analysis.config import GROUP_COLUMN, N_SPLITS, RANDOM_STATE
+from game_player_analysis.config import (
+    FINAL_HOLDOUT_RANDOM_STATE,
+    GROUP_COLUMN,
+    N_SPLITS,
+    RANDOM_STATE,
+)
 
 FoldIndices = Sequence[tuple[np.ndarray, np.ndarray]]
 VALID_GAME_ID = re.compile(r"^[0-9a-f]{14}$")
@@ -49,6 +54,33 @@ def make_group_folds(
     if audit["shared_groups"].ne(0).any():
         raise RuntimeError("Grouped validation leaks at least one game")
     return folds
+
+
+def make_final_group_holdout(
+    frame: pd.DataFrame,
+    *,
+    test_size: float = 0.2,
+    random_state: int = FINAL_HOLDOUT_RANDOM_STATE,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Freeze one match-disjoint holdout for the current audit cycle.
+
+    The split is independent of the inner GroupKFold used for candidate
+    comparison and tuning. It is not described as a historical virgin
+    holdout because earlier project iterations already explored all labeled
+    rows.
+    """
+    groups = safe_game_groups(frame).reset_index(drop=True)
+    development, holdout = next(
+        GroupShuffleSplit(
+            n_splits=1,
+            test_size=test_size,
+            random_state=random_state,
+        ).split(frame, groups=groups)
+    )
+    shared = set(groups.iloc[development]).intersection(groups.iloc[holdout])
+    if shared:
+        raise RuntimeError("Final grouped holdout leaks at least one game")
+    return np.asarray(development, dtype=int), np.asarray(holdout, dtype=int)
 
 
 def audit_group_folds(

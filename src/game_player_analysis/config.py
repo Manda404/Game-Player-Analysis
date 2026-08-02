@@ -17,6 +17,7 @@ TARGET = "winRankPercentage"
 ID_COLUMNS = ("playerId", "teamId", "gameId")
 GROUP_COLUMN = "gameId"
 RANDOM_STATE = 42
+FINAL_HOLDOUT_RANDOM_STATE = 20260802
 N_SPLITS = 5
 
 RAW_REQUIRED_COLUMNS = (

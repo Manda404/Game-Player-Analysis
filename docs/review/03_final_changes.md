@@ -10,7 +10,7 @@
 - features : ablation progressive des familles ;
 - modèles : deux baselines constantes, Ridge, quatre ensembles, tuning borné ;
 - robustesse : stabilité des folds, écart train-validation, sous-groupes,
-  erreurs extrêmes et permutation sur holdout ;
+  erreurs extrêmes, permutation et TreeSHAP sur holdout ;
 - publication : manifeste strict JSON, checksum, versions, schéma ordonné ;
 - inférence : CSV brut validé vers soumission, CLI et tests ;
 - reproductibilité : groupe Poetry dev valide, logging, 23 tests, notebook
@@ -30,7 +30,7 @@
 ## État vérifié
 
 - notebook : 15/15 cellules de code exécutées, zéro erreur ;
-- tests : 23 réussis ;
+- tests : 28 réussis ;
 - formatage/lint : Black et Flake8 réussis ;
 - manifeste : JSON strict, modèle et SHA-256 alignés ;
 - soumission : 5 000 lignes, ordre et bornes contrôlés.

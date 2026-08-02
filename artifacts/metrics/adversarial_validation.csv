@@ -1,0 +1,8 @@
+,value
+method,standardized logistic adversarial validation
+folds,5
+roc_auc_mean,0.49324817000000004
+roc_auc_std,0.005420325940107311
+roc_auc_min,0.4846618
+roc_auc_max,0.49884680000000003
+interpretation,weak multivariate separation

@@ -5,6 +5,7 @@ import pytest
 from game_player_analysis.config import TARGET
 from game_player_analysis.data import (
     DataValidationError,
+    categorical_shift_summary,
     dataset_summary,
     distribution_shift_summary,
     game_mode_summary,
@@ -40,6 +41,16 @@ def test_official_files_load_and_support_documented_summaries():
     assert set(shift.index) == {"walkDist", "kills"}
     assert modes["rows"].sum() == len(train)
     assert set(modes.index) == {"solo", "duo", "squad", "special"}
+    assert {"psi", "ks_statistic", "wasserstein_over_train_std"}.issubset(shift.columns)
+
+
+def test_categorical_shift_reports_effect_sizes(player_frame):
+    reference = player_frame.copy()
+    current = player_frame.copy()
+    current.loc[0, "gameType"] = "new-mode"
+    shift = categorical_shift_summary(reference, current, ["gameType"])
+    assert shift.loc["gameType", "test_only_categories"] == 1
+    assert shift.loc["gameType", "total_variation_distance"] > 0
 
 
 def test_invalid_target_is_rejected(player_frame):

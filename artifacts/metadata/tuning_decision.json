@@ -1,17 +1,16 @@
 {
   "accepted": false,
-  "baseline_mae": 0.061649869523092905,
+  "baseline_mae": 0.06144842296514428,
   "best_parameters": {
-    "colsample_bytree": 1.0,
+    "border_count": 254,
+    "depth": 6,
+    "iterations": 1200,
+    "l2_leaf_reg": 10.0,
     "learning_rate": 0.05,
-    "max_depth": 6,
-    "min_child_weight": 1,
-    "n_estimators": 500,
-    "reg_alpha": 0.1,
-    "reg_lambda": 10.0,
-    "subsample": 1.0
+    "random_strength": 2.0
   },
-  "best_tuned_mae": 0.06176684633678584,
-  "mae_gain": -0.00011697681369293722,
-  "minimum_material_gain": 0.0001
+  "best_tuned_mae": 0.06167102172163117,
+  "mae_gain": -0.00022259875648689142,
+  "minimum_material_gain": 0.0001,
+  "model_family": "CatBoost"
 }

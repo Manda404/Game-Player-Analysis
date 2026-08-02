@@ -1,0 +1,2 @@
+strategy,train_rows,validation_rows,shared_groups,shared_raw_game_ids,validation_rows_from_seen_games_pct,train_date_min,train_date_max,validation_date_min,validation_date_max
+Final cycle holdout,40128,9872,0,0,0.0,2024-01-01,2024-04-30,2024-01-01 00:03:25.636112722,2024-04-29 23:42:51.819436390

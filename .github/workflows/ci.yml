@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests and code quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Poetry
+        run: pipx install poetry==2.1.3
+
+      - name: Install dependencies
+        run: poetry install --with dev --no-interaction
+
+      - name: Run automated tests
+        run: poetry run pytest -q
+
+      - name: Check formatting
+        run: poetry run black --check app src tests scripts
+
+      - name: Run linter
+        run: poetry run flake8 app src tests scripts

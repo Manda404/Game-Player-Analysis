@@ -1,0 +1,30 @@
+{
+  "evidence": {
+    "catboost_wins_every_fold_for_every_k": true,
+    "five_fold_validation_rows": 8025.6,
+    "seven_fold_cost_relative_to_five": 1.5777511363869607,
+    "seven_fold_nominal_mae_gain_vs_five": 0.0001887876706737901,
+    "ten_fold_catboost_mae_std": 0.0013544710662566981,
+    "ten_fold_cost_relative_to_five": 2.14224344787041
+  },
+  "fold_counts_checked": [
+    3,
+    5,
+    7,
+    10
+  ],
+  "holdout_used_for_choice": false,
+  "models_checked": [
+    "CatBoost",
+    "XGBoost"
+  ],
+  "rationale": [
+    "Five folds already preserve the CatBoost decision in every fold.",
+    "Seven folds improve nominal MAE by less than fold uncertainty.",
+    "Seven and ten folds cost materially more while using smaller validation folds.",
+    "The official frozen holdout remains outside this protocol choice."
+  ],
+  "recommended_n_splits": 5,
+  "selection_rule": "prefer the smallest K that preserves the model ranking, provides large match-disjoint validation folds and avoids materially higher compute",
+  "validation_method": "GroupKFold on frozen development partition"
+}

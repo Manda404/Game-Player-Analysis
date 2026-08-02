@@ -1,0 +1,5 @@
+,value
+data_drift_train_vs_test,measurable without target
+performance_or_concept_drift,not measurable: official test target is unavailable
+temporal_drift,not interpretable: date conflicts within gameId
+decision_rule,effect sizes first; KS p-values are descriptive only

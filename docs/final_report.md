@@ -2,163 +2,154 @@
 
 ## Résumé exécutif
 
-Le projet répond au test technique Gameloft par un notebook exécuté et un
-pipeline Python unique. Le modèle publié est XGBoost avec 16 variables
-post-match. Sur cinq folds groupés par `gameId`, il atteint une MAE de
-**0,06165 ± 0,00063**, un RMSE de 0,08679 et un R² moyen de 0,92030.
+Le projet répond au test technique Gameloft par un notebook et un pipeline
+Python reproductibles. Après réaudit de la sélection, le modèle publié est
+**CatBoost avec ses paramètres d'apprentissage par défaut** et 16 variables
+post-match. Il obtient 0,061448 ± 0,001095 de MAE sur cinq folds groupés du
+développement puis **0,060797 de MAE**, 0,086596 de RMSE et 0,920827 de R² sur
+le holdout groupé gelé du cycle d'audit.
 
-Cette performance doit être lue avec deux réserves majeures : `killRank` est
-calculé après le match et explique la plus forte part du signal ; la date
-officielle est incompatible avec les groupes `gameId` observés. Le résultat est
-donc un benchmark post-match robuste aux fuites de match, pas une validation
-early-game ni temporelle.
+Deux réserves dominent l'interprétation : `killRank` est calculé après le match
+et apporte une grande part du signal ; la date officielle est incompatible avec
+les groupes `gameId` observés. Le résultat est donc un benchmark post-match
+robuste aux fuites de match, pas une validation early-game ou temporelle.
 
-Les résultats complets sont dans
-[`artifacts/metrics/`](../artifacts/metrics/) et les preuves visuelles dans
-[`artifacts/figures/`](../artifacts/figures/).
-
-## Sujet et unité statistique
+## Sujet, données et qualité
 
 Une ligne contient les statistiques post-partie d'un joueur. La cible
 `winRankPercentage` représente le classement normalisé de son équipe : 1 pour
-la première place et 0 pour la dernière, selon `maxRank`. Une équipe peut donc
-partager la même cible entre plusieurs joueurs, même si le fichier n'observe
-qu'une petite partie des rosters.
+la première place et 0 pour la dernière, selon `maxRank`. Le train contient
+50 000 lignes attribuées à janvier–avril 2024 et le test 5 000 lignes attribuées
+à mai. Aucun `gameId` brut ne relie train et test.
 
-Le train contient 50 000 lignes attribuées à janvier–avril 2024 ; le test en
-contient 5 000 attribuées à mai. Aucun `gameId` brut ne relie train et test.
+Les fichiers n'ont ni cellule manquante brute ni doublon exact. Les sentinelles
+métier sont conservées avec indicateurs : `rankPts=-1`, puis `killPts=0` et
+`winPts=0` lorsque le ranking est disponible. Le train contient 93 `gameId`
+malformés ; une même valeur répétée reste dans un groupe conservateur commun.
+Les anomalies gameplay sont signalées sans correction arbitraire : 53 lignes
+ont des kills avec zéro dégât et 102 une activité de combat avec distance totale
+nulle.
 
-## Qualité et nettoyage
+## Limites structurelles
 
-Les deux fichiers n'ont ni cellule manquante brute ni doublon exact. Les valeurs
-de ranking contiennent cependant des sentinelles documentées :
+Tous les `gameId` valides multi-lignes portent plusieurs dates, avec une étendue
+médiane de 45,03 jours. La colonne ne permet donc pas une validation temporelle
+fiable. Le train n'observe en moyenne que 1,61 joueur par `gameId` ; 98,82 % des
+couples `(gameId, teamId)` sont singletons et seulement 2,34 % des lignes ont
+un coéquipier observé. Les agrégats équipe/lobby sont rejetés car ils coderaient
+surtout la couverture de l'extrait.
 
-- `rankPts=-1` signifie indisponible ;
-- lorsque `rankPts` est disponible, `killPts=0` et `winPts=0` signifient
-  indisponible ;
-- des drapeaux de disponibilité sont créés et aucune ligne n'est supprimée.
+## Drift train/test
 
-Le train contient 93 `gameId` au format corrompu ou transformé. Une même valeur
-malformée répétée reste dans un groupe conservateur commun ; elle ne peut plus
-traverser l'entraînement et la validation. Les anomalies gameplay sont
-signalées sans correction arbitraire : 53 lignes ont des kills avec zéro dégât
-et 102 une activité de combat avec distance totale nulle.
+La version refactorée ne mesurait que des différences standardisées de moyenne.
+L'audit rétablit PSI, KS, Wasserstein normalisée, masse à zéro, changements de
+catégories et validation adversariale.
 
-## Limites structurelles découvertes
+| Diagnostic | Maximum / résultat | Lecture |
+|---|---:|---|
+| PSI numérique | 0,00509 (`damages`) | faible |
+| KS | 0,01312 (`damages`) | faible ; p=0,411 descriptive |
+| différence moyenne standardisée | 0,02347 (`damages`) | faible |
+| PSI catégoriel | 0,00844 (`gameType`) | faible |
+| déplacement de modalité | -0,622 point (`legacy`) | faible |
+| adversarial ROC AUC | 0,49325 ± 0,00542 | aucune séparation linéaire utile |
 
-### Date incohérente
+Aucun drift matériel n'est détecté sur le contrat mesuré. Cette conclusion ne
+signifie pas distributions identiques : le drift de performance/concept est
+inobservable sans cible test, et le drift temporel est indécidable avec la date
+incohérente.
 
-Parmi les identifiants valides, 13 464 matchs train ont plusieurs lignes. Tous
-portent plusieurs dates, avec une étendue médiane de 45,03 jours, un 95e
-percentile de 99,53 jours et un maximum de 119,30 jours. La cause n'est pas
-observable : le projet qualifie `date` d'incohérente/corrompue, sans supposer un
-export ou une anonymisation particuliers.
-
-### Couverture partielle des équipes et matchs
-
-Le train n'observe en moyenne que 1,61 joueur par `gameId`, avec huit au maximum.
-Parmi 49 411 couples `(gameId, teamId)`, 98,82 % sont des singletons et seulement
-2,34 % des lignes ont un coéquipier observé. Les moyennes/sommes équipe ou lobby
-ont donc été rejetées : elles coderaient surtout la couverture du fichier.
-
-## Analyse et KPI
+## Analyse, features et ablation
 
 La cible a une moyenne de 0,47233, une médiane de 0,45785 et un écart-type de
 0,30745. Les corrélations de Spearman les plus fortes sont `walkDist` (0,866),
 `killRank` (-0,715), `upgrades` (0,681), `weapons` (0,665) et `heals` (0,564).
-Les profils par quantiles confirment des relations non linéaires.
 
-Sept KPI ont été évalués avec des règles explicites pour les divisions par zéro.
-La distance totale, la mobilité/seconde et le headshot ratio restent analytiques
-car trop redondants, mal alignés sur un temps de survie ou trop clairsemés. Les
-indicateurs combat, ressources et dégâts/kill passent par l'ablation.
+Le contrat comportemental contient 15 variables : mesures brutes, features
+dérivées et indicateurs de mode. Le contrat post-match ajoute `killRank`.
 
-## Features et ablation
-
-Le contrat comportemental contient 15 variables : huit mesures brutes, quatre
-features dérivées et trois indicateurs de mode. Le contrat post-match ajoute
-uniquement `killRank`.
-
-| Étape | Features | MAE |
+| Étape | Features | MAE groupée |
 |---|---:|---:|
-| Contexte | 4 | 0,26779 |
-| + mobilité | 7 | 0,09907 |
-| + combat | 11 | 0,09616 |
-| + ressources | 15 | 0,09326 |
-| + `killRank` post-match | 16 | 0,06160 |
+| contexte | 4 | 0,267714 |
+| + mobilité | 7 | 0,098414 |
+| + combat | 11 | 0,095515 |
+| + ressources | 15 | 0,092661 |
+| + `killRank` post-match | 16 | 0,061500 |
 
-L'essentiel du signal comportemental vient de la mobilité. Combat et ressources
-apportent chacun environ 0,0029 de MAE. `killRank` apporte 0,03166, confirmant le
+La mobilité fournit l'essentiel du signal comportemental. Combat et ressources
+apportent chacun environ 0,0029 MAE ; `killRank` apporte 0,03116 et confirme le
 changement de scénario. La projection sur la grille `maxRank` améliore la MAE
-de 0,06165 à 0,06121, mais dégrade le RMSE de 0,08680 à 0,08751 ; elle est
-appliquée à la soumission, pas présentée comme un gain universel.
+de 0,061448 à 0,060982 mais dégrade légèrement le RMSE de 0,086477 à 0,086882.
 
 ## Validation
 
-Le protocole principal est un GroupKFold à cinq folds. Chaque fold contient
-40 000 lignes d'entraînement et 10 000 de validation, avec zéro groupe prudent
-et zéro valeur brute de `gameId` partagés.
+Un holdout groupé est gelé avant le cycle de sélection. Les 40 128 lignes de
+développement alimentent seules la comparaison, l'ablation et le tuning dans
+cinq folds `GroupKFold`. Chaque partition a zéro groupe prudent et zéro
+`gameId` brut partagés. Le test officiel n'entre jamais dans la sélection.
 
-| Holdout | Matchs déjà vus en validation | MAE |
-|---|---:|---:|
-| Aléatoire ligne | 56,64 % | 0,06169 |
-| Groupé `gameId` | 0 % | 0,06168 |
-| Jan–mars → avril naïf | 54,97 % | 0,06169 |
-| Jan–mars → avril purgé | 0 % | 0,06222 |
+Les diagnostics sur le train complet donnent 0,060949 de MAE pour un split
+aléatoire ligne, 0,061160 pour un split groupé, 0,060944 pour janvier–mars vers
+avril naïf et 0,061277 après purge des matchs. Ce dernier est un stress test
+avec moins de données, pas une preuve temporelle.
 
-Le test purgé retire 8 536 lignes antérieures dont le match réapparaît en avril.
-Il constitue un stress test de distribution, pas une preuve chronologique.
+Le nombre de folds a lui aussi été audité. Pour K=3, 5, 7 et 10, CatBoost bat
+XGBoost dans les 25 folds cumulés. Sept folds améliore nominalement la MAE de
+0,000189 par rapport à cinq, mais l'écart reste inférieur à l'incertitude des
+folds tandis que le coût de calcul augmente sensiblement. Dix folds augmente
+encore la charge et la dispersion. Le pipeline conserve donc cinq folds, avec
+environ 8 026 lignes indépendantes par validation.
 
-## Modèles, tuning et surajustement
+Le holdout final contient 9 872 lignes, zéro match partagé et donne 0,060797 de
+MAE. Il est indépendant des décisions du présent audit mais pas historiquement
+vierge : l'EDA antérieure avait observé toutes les lignes étiquetées.
 
-| Rang | Modèle | MAE | MAE train | Diagnostic |
-|---:|---|---:|---:|---|
-| 1 | XGBoost | **0,06165** | 0,05261 | écart modéré |
-| 2 | LightGBM | 0,06168 | 0,05531 | écart modéré |
-| 3 | CatBoost | 0,06170 | 0,05886 | faible écart |
-| 4 | XGBoost tuned | 0,06177 | 0,05409 | écart modéré |
-| 5 | Random Forest | 0,06542 | 0,03033 | écart élevé |
-| 6 | Ridge | 0,08823 | 0,08817 | faible écart |
+## Comparaison, réconciliation et tuning
 
-Les trois premiers sont séparés par moins d'un écart-type de fold. XGBoost est
-retenu pour la MAE et la simplicité de publication, sans revendication de
-supériorité robuste. Un bootstrap descriptif des différences de MAE appariées
-par fold est exporté dans `model_fold_uncertainty.csv`; avec seulement cinq
-folds, il documente l'incertitude et n'est pas présenté comme un test
-d'hypothèse. Six essais aléatoires bornés testent profondeur,
-régularisation, sous-échantillonnage et taux d'apprentissage. Le meilleur essai
-est moins bon de 0,00012 ; il est rejeté selon un seuil de gain minimal fixé à
-0,0001. Random Forest montre l'écart train-validation le plus préoccupant.
+| Rang | Modèle initial par défaut | MAE ± écart-type | MAE train |
+|---:|---|---:|---:|
+| 1 | CatBoost | **0,061448 ± 0,001095** | 0,055269 |
+| 2 | XGBoost | 0,063448 ± 0,001073 | 0,050440 |
+| 3 | LightGBM | 0,063593 ± 0,000912 | 0,059488 |
+| 4 | Random Forest | 0,066677 ± 0,000771 | 0,024722 |
+| 5 | Ridge | 0,088310 ± 0,001395 | 0,088256 |
+| 6 | Dummy médiane | 0,267877 ± 0,000822 | 0,267862 |
 
-## Interprétabilité et erreurs
+CatBoost bat XGBoost dans les cinq folds, de 0,0019999 MAE en moyenne ;
+l'intervalle bootstrap descriptif de la différence XGBoost moins CatBoost vaut
+[0,001829 ; 0,002192].
 
-Sur un holdout groupé indépendant, permuter `killRank` augmente la MAE de 0,266,
-loin devant la mobilité/minute (0,087), les kills (0,075) et `maxRank` (0,054).
-Cette importance est prédictive, non causale.
+L'ancien gagnant XGBoost venait d'une comparaison pré-réglée : 500 arbres,
+profondeur 6, learning rate 0,05 et subsampling 0,85, tandis que CatBoost avait
+une autre configuration personnalisée. Rejouées sur le même protocole, ces
+configurations donnent 0,061999 pour XGBoost et 0,062053 pour CatBoost, soit un
+écart négligeable de 0,000054. La conclusion XGBoost n'était donc pas robuste.
 
-Les erreurs par famille de mode valent 0,047 en solo, 0,053 en duo, 0,071 en
-squad et 0,100 sur les modes spéciaux. Les petites grilles de rang sont plus
-difficiles, mais leurs effectifs sont faibles. Les résidus montrent une
-régression vers la moyenne aux cibles hautes. Les 25 plus grandes erreurs OOF
-sont exportées dans `artifacts/metrics/largest_errors.csv`.
+Seul CatBoost, choisi avant optimisation, passe dans un `RandomizedSearchCV` de
+huit essais sur les mêmes folds. Le meilleur essai donne 0,061671, moins bien
+que le défaut de 0,000223. Le tuning est rejeté selon le seuil de gain minimal
+de 0,0001 fixé avant le holdout. Aucun early stopping n'est mélangé à la CV.
 
-## Publication et inférence
+## Interprétabilité, erreurs et publication
 
-Le bundle contient le modèle, les 16 features ordonnées, les paramètres, les
-versions, la seed, les empreintes des données, les métriques et le SHA-256 du
-modèle. L'inférence valide le CSV officiel, reconstruit les features dans le
-même ordre, refuse les valeurs non finies, borne les prédictions et conserve
-l'ordre des lignes dans la soumission.
+L'importance par permutation sur holdout et les valeurs TreeSHAP natives de
+CatBoost convergent : `killRank` domine, devant la marche par minute, `kills`
+et `maxRank`. Les 2 000 explications SHAP, tirées de manière déterministe des
+9 872 lignes du holdout, reconstruisent chacune la prédiction brute du modèle.
+Ces importances restent prédictives et non causales. Les erreurs sont plus
+fortes sur les modes spéciaux et les petites grilles, dont le support est
+faible. Les diagnostics globaux, locaux et par sous-groupes sont exportés sous
+`artifacts/metrics/`.
 
-## Limites et prochaines données nécessaires
+Le bundle final contient CatBoost, les 16 features ordonnées, paramètres,
+versions, seeds, empreintes des données, métriques et SHA-256. L'inférence
+reconstruit les features, refuse les valeurs non finies, borne les prédictions
+et conserve l'ordre des lignes.
 
-- aucune cible sur le test officiel ;
-- aucun roster complet ni match intégral ;
-- aucune date de match exploitable ;
-- pas de snapshots disponibles au moment d'une décision early-game ;
-- faible support des modes spéciaux et petites grilles ;
-- aucune conclusion causale sur les comportements.
+## Conclusion et données nécessaires
 
-Une version produit nécessite une date cohérente, un holdout futur étiqueté,
-les rosters complets, une identité longitudinale stable et des variables
-horodatées au moment réel de la prédiction.
+Le protocole final suit Dummy → Ridge → candidats par défaut → sélection
+CatBoost → tuning rejeté → holdout groupé → refit complet → inférence test. Une
+version produit nécessite encore une date cohérente, un futur holdout étiqueté
+jamais observé, les rosters complets, une identité longitudinale stable et des
+variables disponibles au moment réel de la décision.

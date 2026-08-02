@@ -4,6 +4,7 @@ import numpy as np
 
 from game_player_analysis.analysis import (
     add_analysis_kpis,
+    adversarial_validation_summary,
     data_quality_table,
     feature_target_profiles,
     kpi_evaluation_table,
@@ -29,3 +30,10 @@ def test_quality_coverage_and_kpi_tables_are_complete(player_frame):
     assert set(coverage.index) == {"train", "test"}
     assert "headshot_ratio" in kpis.index
     assert profiles["rows"].sum() == len(player_frame)
+
+
+def test_adversarial_validation_uses_identical_feature_contract(player_frame):
+    train = player_frame[["walkDist", "kills"]]
+    summary = adversarial_validation_summary(train, train.copy())
+    assert 0 <= summary["roc_auc_mean"] <= 1
+    assert summary["folds"] == len(train)

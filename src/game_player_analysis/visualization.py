@@ -249,6 +249,48 @@ def plot_validation_comparison(
     return axes
 
 
+def plot_drift_diagnostics(
+    numeric_shift: pd.DataFrame,
+    categorical_shift: pd.DataFrame,
+    adversarial_validation: pd.Series,
+) -> np.ndarray:
+    """Visualize univariate and multivariate train/test drift effect sizes."""
+    figure, axes = plt.subplots(2, 2, figsize=(14, 9))
+
+    numeric_shift.nlargest(10, "psi")["psi"].sort_values().plot.barh(color="#2878B5", ax=axes[0, 0])
+    axes[0, 0].axvline(0.1, linestyle="--", color="#D9534F", label="repère PSI 0,1")
+    axes[0, 0].set(title="PSI des features finales", xlabel="PSI", ylabel="")
+    axes[0, 0].legend()
+
+    numeric_shift.nlargest(10, "ks_statistic")["ks_statistic"].sort_values().plot.barh(
+        color="#55A868", ax=axes[0, 1]
+    )
+    axes[0, 1].set(title="Distance KS train/test", xlabel="Statistique KS", ylabel="")
+
+    categorical_shift["total_variation_distance"].sort_values().plot.barh(
+        color="#D9822B", ax=axes[1, 0]
+    )
+    axes[1, 0].set(
+        title="Drift des catégories",
+        xlabel="Distance de variation totale",
+        ylabel="",
+    )
+
+    auc = float(adversarial_validation["roc_auc_mean"])
+    auc_std = float(adversarial_validation["roc_auc_std"])
+    axes[1, 1].barh(["Classifieur train/test"], [auc], xerr=[auc_std], color="#8172B2")
+    axes[1, 1].axvline(0.5, linestyle="--", color="black", label="hasard")
+    axes[1, 1].set(
+        title="Séparabilité multivariée",
+        xlabel="ROC AUC out-of-fold",
+        ylabel="",
+        xlim=(0.45, max(0.65, auc + 0.05)),
+    )
+    axes[1, 1].legend()
+    figure.tight_layout()
+    return axes
+
+
 def plot_feature_ablation(ablation: pd.DataFrame, ax: Axes | None = None) -> Axes:
     """Plot progressive MAE as feature families are added."""
     axis = ax or plt.subplots(figsize=(10, 5))[1]
@@ -412,3 +454,125 @@ def plot_permutation_importance(
         ylabel="",
     )
     return axis
+
+
+def plot_fold_count_study(
+    sensitivity: pd.DataFrame,
+    decision: pd.DataFrame,
+) -> np.ndarray:
+    """Visualize grouped-CV stability and computational cost across fold counts."""
+    figure, axes = plt.subplots(1, 2, figsize=(13.5, 4.8))
+    palette = {"CatBoost": "#2878B5", "XGBoost": "#D9822B"}
+    for model, frame in sensitivity.groupby("model", sort=False):
+        ordered = frame.sort_values("n_splits")
+        axes[0].errorbar(
+            ordered["n_splits"],
+            ordered["mae"],
+            yerr=ordered["mae_std"],
+            marker="o",
+            capsize=3,
+            linewidth=2,
+            color=palette.get(model, "#555555"),
+            label=model,
+        )
+    axes[0].axvline(5, color="#555555", linestyle="--", linewidth=1)
+    axes[0].annotate(
+        "choix : 5 folds",
+        xy=(5, sensitivity["mae"].min()),
+        xytext=(5.35, sensitivity["mae"].min() + 0.00045),
+        color="#555555",
+    )
+    axes[0].set(
+        title="Stabilité des modèles selon K",
+        xlabel="Nombre de folds GroupKFold",
+        ylabel="MAE moyenne ± écart-type entre folds",
+        xticks=sorted(sensitivity["n_splits"].unique()),
+    )
+    axes[0].legend(frameon=False)
+
+    ordered_decision = decision.sort_values("n_splits")
+    bars = axes[1].bar(
+        ordered_decision["n_splits"].astype(str),
+        ordered_decision["fit_cost_relative_to_5_folds"],
+        color=["#9ABED8", "#2878B5", "#D9822B", "#C94A3D"],
+    )
+    axes[1].bar_label(
+        bars, labels=[f"{value:.2f}×" for value in ordered_decision["fit_cost_relative_to_5_folds"]]
+    )
+    axes[1].set(
+        title="Coût relatif du protocole",
+        xlabel="Nombre de folds GroupKFold",
+        ylabel="Temps d'entraînement relatif à 5 folds",
+    )
+    secondary = axes[1].twinx()
+    secondary.plot(
+        ordered_decision["n_splits"].astype(str),
+        ordered_decision["mean_validation_rows"],
+        color="#555555",
+        marker="o",
+        linewidth=1.5,
+    )
+    secondary.set_ylabel("Lignes de validation par fold", color="#555555")
+    secondary.tick_params(axis="y", colors="#555555")
+    figure.tight_layout()
+    return axes
+
+
+def plot_shap_summary(
+    shap_importance: pd.DataFrame,
+    shap_values: pd.DataFrame,
+    *,
+    top_n: int = 10,
+) -> np.ndarray:
+    """Plot global CatBoost TreeSHAP magnitude and signed local contributions."""
+    selected = shap_importance.head(top_n).copy()
+    features = selected["feature"].tolist()
+    figure, axes = plt.subplots(1, 2, figsize=(14, 5.6), gridspec_kw={"width_ratios": [1, 1.5]})
+
+    ordered = selected.sort_values("mean_abs_shap")
+    axes[0].barh(ordered["feature"], ordered["mean_abs_shap"], color="#2878B5", alpha=0.9)
+    axes[0].set(
+        title="Importance globale SHAP",
+        xlabel="Moyenne de |valeur SHAP|",
+        ylabel="",
+    )
+
+    color_artist = None
+    generator = np.random.default_rng(42)
+    for position, feature in enumerate(reversed(features)):
+        values = shap_values.loc[shap_values["feature"].eq(feature)]
+        jitter = generator.uniform(-0.28, 0.28, len(values))
+        lower, upper = values["feature_value"].quantile([0.05, 0.95])
+        if lower == upper:
+            normalized_value = np.full(len(values), 0.5)
+        else:
+            normalized_value = np.clip(
+                (values["feature_value"] - lower) / (upper - lower),
+                0.0,
+                1.0,
+            )
+        color_artist = axes[1].scatter(
+            values["shap_value"],
+            position + jitter,
+            c=normalized_value,
+            cmap="coolwarm",
+            vmin=0.0,
+            vmax=1.0,
+            s=10,
+            alpha=0.55,
+            linewidths=0,
+        )
+    axes[1].axvline(0, color="#555555", linewidth=0.8)
+    axes[1].set(
+        title="Contributions locales sur le holdout",
+        xlabel="Valeur SHAP : contribution au classement prédit",
+        ylabel="",
+        yticks=np.arange(len(features)),
+        yticklabels=list(reversed(features)),
+    )
+    if color_artist is not None:
+        colorbar = figure.colorbar(color_artist, ax=axes[1], pad=0.02)
+        colorbar.set_label("Valeur de la variable")
+        colorbar.set_ticks([0.0, 1.0], labels=["faible", "élevée"])
+    figure.tight_layout()
+    return axes

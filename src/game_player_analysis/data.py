@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+from scipy import stats
 
 from game_player_analysis.config import (
     ID_COLUMNS,
@@ -164,26 +166,151 @@ def distribution_shift_summary(
     current: pd.DataFrame,
     columns: list[str] | tuple[str, ...],
 ) -> pd.DataFrame:
-    """Compare numeric distributions with a scale-free mean difference."""
+    """Compare numeric distributions with complementary drift diagnostics.
+
+    Standardized mean difference only detects a location shift. PSI, the KS
+    statistic, normalized Wasserstein distance and zero-rate changes also
+    expose changes in shape, tails and point masses. P-values are reported for
+    traceability but are not used as an automatic decision rule because they
+    depend strongly on sample size and KS is approximate for discrete values.
+    """
     rows = []
     for column in columns:
-        scale = float(reference[column].std(ddof=1))
+        reference_values = reference[column].dropna().astype(float)
+        current_values = current[column].dropna().astype(float)
+        if reference_values.empty or current_values.empty:
+            raise ValueError(f"Cannot assess drift for empty feature: {column}")
+        scale = float(reference_values.std(ddof=1))
         standardized_difference = (
-            float(current[column].mean() - reference[column].mean()) / scale if scale > 0 else 0.0
+            float(current_values.mean() - reference_values.mean()) / scale if scale > 0 else 0.0
         )
+        ks_result = stats.ks_2samp(reference_values, current_values, method="auto")
+        wasserstein = float(stats.wasserstein_distance(reference_values, current_values))
+        psi = population_stability_index(reference_values, current_values)
         rows.append(
             {
                 "feature": column,
-                "train_mean": reference[column].mean(),
-                "test_mean": current[column].mean(),
+                "train_mean": reference_values.mean(),
+                "test_mean": current_values.mean(),
                 "standardized_mean_difference": standardized_difference,
+                "ks_statistic": float(ks_result.statistic),
+                "ks_pvalue": float(ks_result.pvalue),
+                "psi": psi,
+                "wasserstein_over_train_std": wasserstein / scale if scale > 0 else 0.0,
+                "train_zero_pct": float(100 * reference_values.eq(0).mean()),
+                "test_zero_pct": float(100 * current_values.eq(0).mean()),
+                "zero_pct_point_change": float(
+                    100 * (current_values.eq(0).mean() - reference_values.eq(0).mean())
+                ),
+                "train_p95": float(reference_values.quantile(0.95)),
+                "test_p95": float(current_values.quantile(0.95)),
             }
         )
+    return pd.DataFrame(rows).set_index("feature").sort_values("psi", ascending=False)
+
+
+def population_stability_index(
+    reference: pd.Series,
+    current: pd.Series,
+    *,
+    bins: int = 10,
+) -> float:
+    """Return quantile-bin PSI as a descriptive train/current diagnostic."""
+    reference_values = reference.dropna()
+    current_values = current.dropna()
+    if reference_values.empty or current_values.empty:
+        raise ValueError("PSI requires non-empty reference and current values")
+
+    if pd.api.types.is_numeric_dtype(reference_values) and reference_values.nunique() > bins:
+        edges = np.unique(np.quantile(reference_values, np.linspace(0, 1, bins + 1)))
+        if len(edges) < 2:
+            return 0.0
+        edges[0], edges[-1] = -np.inf, np.inf
+        reference_counts = pd.cut(reference_values, edges, include_lowest=True).value_counts(
+            sort=False
+        )
+        current_counts = pd.cut(current_values, edges, include_lowest=True).value_counts(sort=False)
+    else:
+        categories = reference_values.value_counts().index.union(
+            current_values.value_counts().index
+        )
+        reference_counts = reference_values.value_counts().reindex(categories, fill_value=0)
+        current_counts = current_values.value_counts().reindex(categories, fill_value=0)
+
+    epsilon = 1e-6
+    reference_pct = (reference_counts / reference_counts.sum()).clip(lower=epsilon)
+    current_pct = (current_counts / current_counts.sum()).clip(lower=epsilon)
+    return float(((current_pct - reference_pct) * np.log(current_pct / reference_pct)).sum())
+
+
+def categorical_shift_detail(
+    reference: pd.DataFrame,
+    current: pd.DataFrame,
+    columns: list[str] | tuple[str, ...],
+) -> pd.DataFrame:
+    """Return category proportions and signed percentage-point changes."""
+    rows: list[dict[str, object]] = []
+    for column in columns:
+        reference_values = reference[column].astype("string").fillna("<missing>")
+        current_values = current[column].astype("string").fillna("<missing>")
+        categories = sorted(set(reference_values).union(current_values))
+        reference_pct = reference_values.value_counts(normalize=True).reindex(
+            categories, fill_value=0.0
+        )
+        current_pct = current_values.value_counts(normalize=True).reindex(
+            categories, fill_value=0.0
+        )
+        for category in categories:
+            rows.append(
+                {
+                    "feature": column,
+                    "category": category,
+                    "train_pct": float(100 * reference_pct.loc[category]),
+                    "test_pct": float(100 * current_pct.loc[category]),
+                    "percentage_point_change": float(
+                        100 * (current_pct.loc[category] - reference_pct.loc[category])
+                    ),
+                }
+            )
     return (
         pd.DataFrame(rows)
-        .set_index("feature")
-        .sort_values("standardized_mean_difference", key=abs, ascending=False)
+        .sort_values(
+            ["feature", "percentage_point_change"],
+            key=lambda values: (values.abs() if pd.api.types.is_numeric_dtype(values) else values),
+            ascending=[True, False],
+        )
+        .reset_index(drop=True)
     )
+
+
+def categorical_shift_summary(
+    reference: pd.DataFrame,
+    current: pd.DataFrame,
+    columns: list[str] | tuple[str, ...],
+) -> pd.DataFrame:
+    """Summarize categorical drift with PSI and total variation distance."""
+    detail = categorical_shift_detail(reference, current, columns)
+    rows: list[dict[str, object]] = []
+    for column in columns:
+        feature_detail = detail.loc[detail["feature"].eq(column)].copy()
+        largest = feature_detail.loc[feature_detail["percentage_point_change"].abs().idxmax()]
+        reference_values = reference[column].astype("string").fillna("<missing>")
+        current_values = current[column].astype("string").fillna("<missing>")
+        rows.append(
+            {
+                "feature": column,
+                "psi": population_stability_index(reference_values, current_values),
+                "total_variation_distance": float(
+                    0.5 * feature_detail["percentage_point_change"].abs().sum() / 100
+                ),
+                "largest_shift_category": largest["category"],
+                "largest_percentage_point_change": float(largest["percentage_point_change"]),
+                "train_unique": int(reference_values.nunique()),
+                "test_unique": int(current_values.nunique()),
+                "test_only_categories": int(len(set(current_values).difference(reference_values))),
+            }
+        )
+    return pd.DataFrame(rows).set_index("feature").sort_values("psi", ascending=False)
 
 
 def raw_data_fingerprints(

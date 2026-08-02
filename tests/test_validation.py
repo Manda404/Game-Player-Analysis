@@ -4,6 +4,7 @@ from game_player_analysis.validation import (
     audit_group_folds,
     audit_holdout_splits,
     make_group_folds,
+    make_final_group_holdout,
     make_holdout_splits,
     safe_game_groups,
     split_leakage_comparison,
@@ -40,3 +41,10 @@ def test_purged_pseudo_temporal_split_removes_seen_games(player_frame):
     audit = audit_holdout_splits(repeated, make_holdout_splits(repeated))
     assert audit.loc["Naive Jan-Mar → Apr", "shared_groups"] > 0
     assert audit.loc["Purged Jan-Mar → Apr", "shared_groups"] == 0
+
+
+def test_final_holdout_is_match_disjoint(player_frame):
+    repeated = player_frame.loc[player_frame.index.repeat(10)].reset_index(drop=True)
+    development, holdout = make_final_group_holdout(repeated, test_size=0.5)
+    groups = safe_game_groups(repeated)
+    assert set(groups.iloc[development]).isdisjoint(groups.iloc[holdout])

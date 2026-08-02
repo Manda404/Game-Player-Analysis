@@ -6,6 +6,10 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from game_player_analysis.cleaning import clean_ranking_sentinels, quality_issues
 from game_player_analysis.config import TARGET
@@ -284,5 +288,58 @@ def target_grid_summary(frame: pd.DataFrame) -> pd.Series:
             "grid_distance_p95": distance_to_integer.quantile(0.95),
             "grid_distance_max": distance_to_integer.max(),
             "rows_within_0.0001_of_grid": int(distance_to_integer.le(0.0001).sum()),
+        }
+    )
+
+
+def adversarial_validation_summary(
+    train_features: pd.DataFrame,
+    test_features: pd.DataFrame,
+    *,
+    random_state: int = 42,
+) -> pd.Series:
+    """Measure multivariate train/test separability with out-of-fold ROC AUC.
+
+    A linear classifier is intentionally used as a compact complement to the
+    univariate drift table, not as proof that no nonlinear shift exists.
+    """
+    if list(train_features.columns) != list(test_features.columns):
+        raise ValueError("Adversarial validation requires an identical feature contract")
+    features = pd.concat([train_features, test_features], ignore_index=True)
+    dataset_label = np.concatenate(
+        [np.zeros(len(train_features), dtype=int), np.ones(len(test_features), dtype=int)]
+    )
+    estimator = make_pipeline(
+        StandardScaler(),
+        LogisticRegression(
+            class_weight="balanced",
+            max_iter=1_000,
+            random_state=random_state,
+        ),
+    )
+    n_splits = min(5, len(train_features), len(test_features))
+    if n_splits < 2:
+        raise ValueError("Adversarial validation requires at least two rows per dataset")
+    splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    result = cross_validate(
+        estimator,
+        features,
+        dataset_label,
+        cv=splitter,
+        scoring="roc_auc",
+        n_jobs=1,
+    )
+    scores = result["test_score"]
+    return pd.Series(
+        {
+            "method": "standardized logistic adversarial validation",
+            "folds": len(scores),
+            "roc_auc_mean": float(scores.mean()),
+            "roc_auc_std": float(scores.std(ddof=1)),
+            "roc_auc_min": float(scores.min()),
+            "roc_auc_max": float(scores.max()),
+            "interpretation": (
+                "weak multivariate separation" if scores.mean() < 0.60 else "material separation"
+            ),
         }
     )

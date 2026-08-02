@@ -95,14 +95,14 @@ configure_logging()
 
 La cellule suivante repart des CSV bruts et exécute une seule chaîne commune :
 validation, nettoyage, EDA, feature engineering, GroupKFold, quatre ensembles,
-tuning borné, ablations, diagnostics, modèle final, manifeste et soumission.
-La seed vaut 42 ; les empreintes SHA-256 des données sont conservées dans le
-manifeste.
+holdout groupé gelé, tuning borné, ablations, drift, diagnostics, modèle final,
+manifeste et soumission. La seed de modélisation vaut 42 ; les empreintes
+SHA-256 des données sont conservées dans le manifeste.
 """
         ),
         code(
             """
-results = run_final_analysis(tuning_iterations=6)
+results = run_final_analysis(tuning_iterations=8)
 tables = results["tables"]
 display(Markdown(f"**Modèle publié : {results['winner']}**"))
 """
@@ -162,7 +162,28 @@ sont donc **rejetés** : ils mesureraient surtout le mécanisme d'échantillonna
 pas la performance complète de l'équipe.
 """
         ),
-        markdown("## 5. Analyse exploratoire et hypothèses"),
+        markdown("## 5. Drift train/test"),
+        code(
+            """
+display(tables["distribution_shift"].head(16))
+display(tables["categorical_shift"])
+display(tables["adversarial_validation"])
+display(tables["drift_limitations"])
+display(Image(filename=str(results["paths"]["figure_drift"])))
+"""
+        ),
+        markdown(
+            """
+Le drift est mesuré par PSI, KS, Wasserstein normalisée, variations de masse à
+zéro, déplacements catégoriels et validation adversariale. Le PSI numérique
+maximal vaut environ 0,0051, le PSI catégoriel maximal 0,0084 et le ROC AUC
+adversarial 0,493 : aucune dérive matérielle n'est détectée sur le contrat de
+features mesuré. Cela ne prouve pas l'identité des distributions. Sans cible
+test, le drift de performance/concept reste inconnu ; avec la date incohérente,
+le drift temporel n'est pas interprétable.
+"""
+        ),
+        markdown("## 6. Analyse exploratoire et hypothèses"),
         code(
             """
 display(tables["target_grid"].to_frame("valeur"))
@@ -182,7 +203,7 @@ et leurs intervalles à 95 % montrent les relations non linéaires ; la matrice
 de Spearman reste ciblée pour ne pas masquer ces effets.
 """
         ),
-        markdown("## 6. KPI analytiques"),
+        markdown("## 7. KPI analytiques"),
         code('display(tables["kpi_evaluation"])'),
         markdown(
             """
@@ -194,7 +215,7 @@ sont trop clairsemés. `damage_per_kill`, `combat_activity` et
 mesuré, pas de leur plausibilité seule.
 """
         ),
-        markdown("## 7. Features et ablation progressive"),
+        markdown("## 8. Features et ablation progressive"),
         code(
             """
 display(tables["feature_ablation"].set_index("stage"))
@@ -206,70 +227,120 @@ display(Image(filename=str(results["paths"]["figure_ablation"])))
             """
 La mobilité produit le principal gain comportemental ; combat et ressources
 améliorent ensuite modestement la MAE. L'ajout de `killRank` fait passer la MAE
-d'environ 0,0933 à 0,0616 : le modèle publié est donc explicitement un modèle
+d'environ 0,0927 à 0,0615 : le modèle publié est donc explicitement un modèle
 **post-match**, et non une prédiction early-game. La projection sur la grille
 `maxRank` améliore légèrement la MAE mais dégrade le RMSE ; elle est réservée à
 la soumission, avec cette contrepartie documentée.
 """
         ),
-        markdown("## 8. Validation et contrôles de fuite"),
+        markdown("## 9. Validation et contrôles de fuite"),
         code(
             """
 display(tables["fold_audit"])
 display(tables["holdout_audit"])
 display(tables["holdout_performance"])
+display(tables["final_holdout_audit"])
+display(tables["final_holdout_evaluation"])
 display(Image(filename=str(results["paths"]["figure_validation"])))
 """
         ),
         markdown(
             """
-Le protocole principal est un GroupKFold à 5 folds sur `gameId`. Les valeurs
-malformées répétées sont groupées conservativement ; aucune valeur brute ni
-groupe synthétique ne traverse un fold. Un split aléatoire de lignes expose
-plus de la moitié de sa validation à des matchs déjà vus. Le stress test
-Jan–mars → avril purge 8 536 lignes partageant un match avec avril ; sa MAE un
-peu plus élevée mesure la robustesse, mais ne valide pas la chronologie puisque
-`date` est incohérente.
+Un holdout groupé est gelé avant la sélection. Les 40 128 lignes restantes
+alimentent le GroupKFold à 5 folds ; les valeurs malformées répétées sont
+groupées conservativement et aucun identifiant ne traverse une partition. Un
+split aléatoire de lignes expose plus de la moitié de sa validation à des matchs
+déjà vus. Le stress test Jan–mars → avril reste non chronologique puisque
+`date` est incohérente. Après gel de la décision, CatBoost atteint environ
+0,06080 de MAE sur les 9 872 lignes du holdout du cycle.
 """
         ),
-        markdown("## 9. Baselines et comparaison des modèles"),
+        markdown("## 10. Justification du nombre de folds"),
         code(
             """
-display(tables["model_comparison"].set_index("rank"))
+fold_metrics_path = PROJECT_ROOT / "artifacts" / "metrics" / "fold_count_sensitivity.csv"
+fold_decision_path = PROJECT_ROOT / "artifacts" / "metrics" / "fold_count_decision.csv"
+fold_figure_path = PROJECT_ROOT / "artifacts" / "figures" / "07c_fold_count_sensitivity.png"
+if not (fold_metrics_path.exists() and fold_decision_path.exists() and fold_figure_path.exists()):
+    from scripts.run_fold_count_study import main as run_fold_count_study
+
+    run_fold_count_study()
+
+fold_sensitivity = pd.read_csv(fold_metrics_path)
+fold_decision = pd.read_csv(fold_decision_path)
+fold_comparison = (
+    fold_sensitivity.pivot(index="n_splits", columns="model", values="mae")
+    .join(fold_sensitivity.loc[fold_sensitivity["model"].eq("CatBoost")].set_index("n_splits")[
+        ["mae_std", "mae_standard_error", "mean_validation_rows"]
+    ])
+    .join(fold_decision.set_index("n_splits")[
+        ["catboost_winning_folds", "fit_cost_relative_to_5_folds"]
+    ])
+)
+display(fold_comparison)
+display(Image(filename=str(fold_figure_path)))
+"""
+        ),
+        markdown(
+            """
+L'étude compare `GroupKFold` avec K=3, 5, 7 et 10 sur les mêmes 40 128 lignes
+de développement ; le holdout final reste fermé. CatBoost gagne XGBoost dans
+les 25 folds cumulés. Sept folds affiche une MAE nominalement plus basse que
+cinq (gain de **0,000189**), mais cet écart est inférieur à l'erreur standard
+des folds et provient aussi d'apprentissages mécaniquement plus grands.
+
+**Décision : 5 folds.** Chaque validation conserve environ 8 026 lignes de
+matchs indépendants, la décision CatBoost est déjà stable dans les cinq folds,
+et sept folds alourdit sensiblement le calcul. Dix folds double au moins la
+charge mesurée, réduit la validation à environ 4 013 lignes et augmente la
+dispersion. Le ratio de temps exact dépend de la machine ; il est affiché dans
+la figure. Choisir K=7 uniquement parce que son score affiché est le plus faible
+reviendrait à optimiser le protocole après observation des résultats.
+"""
+        ),
+        markdown("## 11. Baselines et comparaison initiale"),
+        code(
+            """
+display(tables["initial_model_comparison"].set_index("rank"))
 display(tables["model_fold_uncertainty"])
+display(tables["pre_audit_configuration_comparison"])
 display(Image(filename=str(results["paths"]["figure_models"])))
 """
         ),
         markdown(
             """
-Les moyennes/médianes constantes et Ridge constituent les baselines. Les trois
-meilleurs ensembles sont séparés par moins d'un écart-type de fold : XGBoost
-est retenu pour sa meilleure MAE, mais on ne prétend pas qu'il domine
-structurellement LightGBM et CatBoost. Random Forest présente le plus grand
-écart train/validation et un coût d'ajustement supérieur.
+Les `DummyRegressor` moyenne/médiane et Ridge constituent les baselines. Les
+quatre ensembles utilisent leurs hyperparamètres d'apprentissage par défaut,
+avec seulement seed, parallélisme, objectif et verbosité explicités. CatBoost
+bat XGBoost d'environ 0,0020 MAE et dans les cinq folds. Le rejeu des anciennes
+configurations personnalisées ne donnait à XGBoost qu'un avantage de 0,000054 :
+ce pré-réglage expliquait l'inversion historique du gagnant.
 """
         ),
-        markdown("## 10. Tuning borné et décision anti-surajustement"),
+        markdown("## 12. Tuning borné et décision anti-surajustement"),
         code(
             """
-display(tables["tuning_trials"].sort_values("mae").head(6))
+display(tables["tuning_trials"].sort_values("mae").head(8))
+display(tables["tuning_comparison"])
 display(pd.Series(results["tuning_decision"], name="décision").to_frame())
 display(Image(filename=str(results["paths"]["figure_tuning"])))
 """
         ),
         markdown(
             """
-Six configurations XGBoost sont testées dans un espace borné sur les mêmes
-folds groupés. Le meilleur essai ne bat pas la configuration figée ; le seuil
-de gain matériel (0,0001 MAE) n'est donc pas atteint. Le tuning est rejeté.
-Cette règle décidée avant publication évite de choisir une fluctuation de CV.
+Huit configurations CatBoost sont testées par `RandomizedSearchCV` sur les
+mêmes folds groupés. Le meilleur essai (0,061671) dégrade la configuration par
+défaut (0,061448) de 0,000223 ; le seuil de gain matériel de 0,0001 n'est pas
+atteint. Le tuning est rejeté avant ouverture du holdout final.
 """
         ),
-        markdown("## 11. Interprétabilité et analyse d'erreurs"),
+        markdown("## 13. Interprétabilité SHAP et analyse d'erreurs"),
         code(
             """
 display(tables["permutation_importance"].head(16))
+display(tables["shap_global_importance"].head(16))
 display(Image(filename=str(results["paths"]["figure_importance"])))
+display(Image(filename=str(results["paths"]["figure_shap"])))
 display(Image(filename=str(results["paths"]["figure_errors"])))
 """
         ),
@@ -284,15 +355,29 @@ display(tables["largest_errors"].head(10))
         ),
         markdown(
             """
-La permutation confirme que `killRank` porte l'essentiel du signal post-match,
-suivi de la mobilité, des kills et de `maxRank`. Les modes spéciaux et les
-petites grilles affichent les erreurs les plus hautes, mais leurs effectifs sont
-faibles : ce sont des alertes, pas des conclusions stables. Les résidus montrent
-une régression vers la moyenne aux cibles élevées et quelques erreurs extrêmes ;
-les cas les plus difficiles sont exportés pour inspection reproductible.
+La permutation et TreeSHAP apportent deux lectures complémentaires. La
+permutation mesure la perte de MAE lorsqu'une variable est mélangée ; TreeSHAP
+explique le sens et l'amplitude de la contribution de chaque variable pour
+chaque prédiction. CatBoost calcule TreeSHAP nativement sur 2 000 lignes tirées
+de façon déterministe parmi les 9 872 lignes du holdout, après le choix du
+modèle. Le pipeline vérifie que la somme des valeurs SHAP et de la valeur
+attendue reconstruit chaque prédiction brute.
+
+Les deux diagnostics placent `killRank` au premier rang, puis la marche par
+minute, `kills` et `maxRank`. Sur le panneau SHAP, une contribution positive
+augmente le classement prédit et une contribution négative le diminue ; la
+couleur représente une valeur faible (bleu) ou élevée (rouge) **au sein de la
+variable affichée**, et non une unité comparable entre variables. Ces résultats
+décrivent des dépendances prédictives post-match, pas des effets causaux.
+
+Les modes spéciaux et les petites grilles affichent les erreurs les plus hautes,
+mais leurs effectifs sont faibles : ce sont des alertes, pas des conclusions
+stables. Les résidus montrent une régression vers la moyenne aux cibles élevées
+et quelques erreurs extrêmes ; les cas les plus difficiles sont exportés pour
+inspection reproductible.
 """
         ),
-        markdown("## 12. Contrat d'inférence"),
+        markdown("## 14. Contrat d'inférence"),
         code(
             """
 submission_check = predict_frame(
@@ -318,12 +403,13 @@ et la cible bornée/projetée sur la grille légale.
         ),
         markdown(
             """
-## 13. Conclusion, limites et prochaines étapes
+## 15. Conclusion, limites et prochaines étapes
 
-Le pipeline final atteint une MAE GroupKFold d'environ **0,06165** et un R²
-d'environ **0,9203** dans le scénario post-match. Sans `killRank`, la MAE
-comportementale est d'environ **0,09326**. La principale conclusion n'est donc
-pas seulement le score : `killRank` change la nature du cas d'usage.
+CatBoost par défaut atteint une MAE GroupKFold développement d'environ
+**0,06145**, puis **0,06080** avec un R² de **0,92083** sur le holdout groupé du
+cycle. Sans `killRank`, la MAE comportementale est d'environ **0,09266**. La
+principale conclusion n'est donc pas seulement le score : `killRank` change la
+nature du cas d'usage.
 
 Limites irréductibles : test sans cible, chronologie inutilisable, couverture
 très partielle des matchs/équipes, faible support de certains modes et absence

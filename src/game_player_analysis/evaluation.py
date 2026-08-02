@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from catboost import CatBoostRegressor, Pool
 from sklearn.base import RegressorMixin, clone
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -215,6 +216,110 @@ def holdout_permutation_importance(
         }
     ).sort_values("mae_increase_mean", ascending=False)
     return importance.reset_index(drop=True), prediction
+
+
+def catboost_holdout_shap_values(
+    estimator: RegressorMixin,
+    X: pd.DataFrame,
+    y: pd.Series,
+    validation_index: np.ndarray,
+    prediction: np.ndarray,
+    *,
+    max_samples: int = 2_000,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Explain a frozen CatBoost model on a deterministic grouped-holdout sample.
+
+    CatBoost computes exact TreeSHAP values natively through
+    ``get_feature_importance(type="ShapValues")``.  The last column is the
+    expected value; it is separated from the feature contributions so the
+    returned long table can be inspected or plotted without a separate SHAP
+    dependency.  The additivity identity is checked against raw predictions.
+    """
+    if not isinstance(estimator, CatBoostRegressor):
+        raise TypeError("SHAP explanations require a fitted CatBoostRegressor")
+    if max_samples < 1:
+        raise ValueError("max_samples must be at least one")
+
+    holdout_rows = np.asarray(validation_index, dtype=int)
+    clipped_prediction = np.asarray(prediction, dtype=float)
+    if len(holdout_rows) != len(clipped_prediction):
+        raise ValueError("Prediction length does not match the SHAP holdout")
+
+    if len(holdout_rows) > max_samples:
+        generator = np.random.default_rng(random_state)
+        sample_positions = np.sort(
+            generator.choice(len(holdout_rows), size=max_samples, replace=False)
+        )
+    else:
+        sample_positions = np.arange(len(holdout_rows))
+
+    sample_rows = holdout_rows[sample_positions]
+    sample_features = X.iloc[sample_rows].copy()
+    shap_matrix = np.asarray(
+        estimator.get_feature_importance(Pool(sample_features), type="ShapValues"),
+        dtype=float,
+    )
+    expected_shape = (len(sample_features), sample_features.shape[1] + 1)
+    if shap_matrix.shape != expected_shape:
+        raise RuntimeError(
+            "Unexpected CatBoost SHAP shape: "
+            f"expected {expected_shape}, received {shap_matrix.shape}"
+        )
+
+    feature_contributions = shap_matrix[:, :-1]
+    expected_value = shap_matrix[:, -1]
+    raw_prediction = np.asarray(estimator.predict(sample_features), dtype=float)
+    if not np.allclose(
+        feature_contributions.sum(axis=1) + expected_value,
+        raw_prediction,
+        rtol=1e-6,
+        atol=1e-7,
+    ):
+        raise RuntimeError("CatBoost SHAP values do not reconstruct the model prediction")
+    if not np.allclose(
+        np.clip(raw_prediction, 0.0, 1.0),
+        clipped_prediction[sample_positions],
+        rtol=1e-6,
+        atol=1e-7,
+    ):
+        raise RuntimeError("SHAP model predictions differ from the frozen holdout predictions")
+
+    feature_names = sample_features.columns.to_numpy()
+    global_importance = pd.DataFrame(
+        {
+            "feature": feature_names,
+            "mean_abs_shap": np.abs(feature_contributions).mean(axis=0),
+            "mean_shap": feature_contributions.mean(axis=0),
+            "positive_shap_share": (feature_contributions > 0).mean(axis=0),
+            "explained_rows": len(sample_rows),
+            "holdout_rows": len(holdout_rows),
+        }
+    ).sort_values("mean_abs_shap", ascending=False, ignore_index=True)
+    global_importance.insert(0, "rank", np.arange(1, len(global_importance) + 1))
+
+    sample = pd.DataFrame(
+        {
+            "source_row": sample_rows,
+            TARGET: y.iloc[sample_rows].to_numpy(),
+            "raw_prediction": raw_prediction,
+            "prediction": np.clip(raw_prediction, 0.0, 1.0),
+            "expected_value": expected_value,
+        }
+    )
+    sample["residual"] = sample["prediction"] - sample[TARGET]
+    sample["absolute_error"] = sample["residual"].abs()
+
+    shap_values = pd.DataFrame(
+        {
+            "source_row": np.repeat(sample_rows, len(feature_names)),
+            "feature": np.tile(feature_names, len(sample_rows)),
+            "feature_value": sample_features.to_numpy(dtype=float).reshape(-1),
+            "shap_value": feature_contributions.reshape(-1),
+        }
+    )
+    shap_values["absolute_shap_value"] = shap_values["shap_value"].abs()
+    return global_importance, sample, shap_values
 
 
 def build_submission(test: pd.DataFrame, prediction: np.ndarray) -> pd.DataFrame:

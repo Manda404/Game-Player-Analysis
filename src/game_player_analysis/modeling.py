@@ -19,9 +19,11 @@ import pandas as pd
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 from sklearn.base import RegressorMixin, clone
+from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import ParameterSampler
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
@@ -50,16 +52,106 @@ XGBOOST_TUNING_SPACE: dict[str, list[Any]] = {
     "reg_lambda": [1.0, 5.0, 10.0],
 }
 
+CATBOOST_TUNING_SPACE: dict[str, list[Any]] = {
+    "iterations": [400, 800, 1_200],
+    "learning_rate": [0.03, 0.05, 0.08],
+    "depth": [4, 6, 8],
+    "l2_leaf_reg": [1.0, 3.0, 5.0, 10.0],
+    "random_strength": [0.5, 1.0, 2.0],
+    "border_count": [64, 128, 254],
+}
+
+TECHNICAL_PARAMETERS: dict[str, tuple[str, ...]] = {
+    "Random Forest": ("random_state", "n_jobs"),
+    "XGBoost": ("objective", "random_state", "n_jobs", "verbosity"),
+    "LightGBM": ("random_state", "n_jobs", "verbosity"),
+    "CatBoost": (
+        "loss_function",
+        "random_seed",
+        "verbose",
+        "allow_writing_files",
+        "thread_count",
+    ),
+}
+
+LEARNING_PARAMETERS: dict[str, tuple[str, ...]] = {
+    "Random Forest": ("n_estimators", "min_samples_leaf", "max_features", "max_depth"),
+    "XGBoost": (
+        "n_estimators",
+        "learning_rate",
+        "max_depth",
+        "min_child_weight",
+        "subsample",
+        "colsample_bytree",
+        "reg_alpha",
+        "reg_lambda",
+    ),
+    "LightGBM": (
+        "n_estimators",
+        "learning_rate",
+        "num_leaves",
+        "min_child_samples",
+        "subsample",
+        "colsample_bytree",
+        "reg_alpha",
+        "reg_lambda",
+    ),
+    "CatBoost": (
+        "iterations",
+        "learning_rate",
+        "depth",
+        "l2_leaf_reg",
+        "random_strength",
+        "bagging_temperature",
+        "border_count",
+    ),
+}
+
 
 def build_model_candidates(
     random_state: int = RANDOM_STATE,
 ) -> dict[str, RegressorMixin]:
-    """Return one linear baseline and four tree-ensemble candidates."""
+    """Return a linear baseline and untuned candidate model families.
+
+    Learning hyperparameters retain library defaults. Only operational
+    settings for reproducibility, resources, output and regression loss are
+    supplied explicitly.
+    """
     return {
         "Linear Ridge baseline": make_pipeline(
             StandardScaler(),
-            Ridge(alpha=1.0),
+            Ridge(),
         ),
+        "Random Forest": RandomForestRegressor(
+            random_state=random_state,
+            n_jobs=-1,
+        ),
+        "XGBoost": XGBRegressor(
+            objective="reg:squarederror",
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=0,
+        ),
+        "LightGBM": LGBMRegressor(
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=-1,
+        ),
+        "CatBoost": CatBoostRegressor(
+            loss_function="RMSE",
+            random_seed=random_state,
+            verbose=False,
+            allow_writing_files=False,
+            thread_count=-1,
+        ),
+    }
+
+
+def build_pre_audit_model_candidates(
+    random_state: int = RANDOM_STATE,
+) -> dict[str, RegressorMixin]:
+    """Reproduce the customized configurations used before this audit."""
+    return {
         "Random Forest": RandomForestRegressor(
             n_estimators=250,
             min_samples_leaf=2,
@@ -104,7 +196,39 @@ def build_model_candidates(
     }
 
 
+def model_parameter_audit_table() -> pd.DataFrame:
+    """Contrast the pre-audit custom benchmark with the fair initial setup."""
+    previous = build_pre_audit_model_candidates()
+    audited = build_model_candidates()
+    rows: list[dict[str, Any]] = []
+    for model_name in LEARNING_PARAMETERS:
+        previous_parameters = previous[model_name].get_params(deep=False)
+        audited_parameters = audited[model_name].get_params(deep=False)
+        previous_learning = {
+            parameter: previous_parameters[parameter]
+            for parameter in LEARNING_PARAMETERS[model_name]
+            if parameter in previous_parameters
+        }
+        audited_technical = {
+            parameter: audited_parameters[parameter]
+            for parameter in TECHNICAL_PARAMETERS[model_name]
+            if parameter in audited_parameters
+        }
+        rows.append(
+            {
+                "model": model_name,
+                "pre_audit_learning_parameters": json.dumps(previous_learning, sort_keys=True),
+                "audited_initial_learning_parameters": "library defaults",
+                "audited_technical_parameters": json.dumps(audited_technical, sort_keys=True),
+                "pre_audit_comparison_fair": False,
+                "audited_initial_comparison_fair": True,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _baseline_evaluation(
+    X: pd.DataFrame,
     y: pd.Series,
     folds: FoldIndices,
     feature_count: int,
@@ -116,14 +240,18 @@ def _baseline_evaluation(
     oof = np.full(len(y), np.nan)
     rows = []
     for fold, (train_index, validation_index) in enumerate(folds, start=1):
-        reference = float(getattr(y.iloc[train_index], statistic)())
-        train_prediction = np.full(len(train_index), reference)
-        validation_prediction = np.full(len(validation_index), reference)
+        model = DummyRegressor(strategy=statistic)
+        model.fit(X.iloc[train_index], y.iloc[train_index])
+        train_prediction = model.predict(X.iloc[train_index])
+        validation_prediction = model.predict(X.iloc[validation_index])
         oof[validation_index] = validation_prediction
+        train_metrics = regression_metrics(y.iloc[train_index], train_prediction)
         rows.append(
             {
                 "fold": fold,
-                "train_mae": regression_metrics(y.iloc[train_index], train_prediction)["mae"],
+                "train_mae": train_metrics["mae"],
+                "train_rmse": train_metrics["rmse"],
+                "train_r2": train_metrics["r2"],
                 **regression_metrics(y.iloc[validation_index], validation_prediction),
                 "fit_seconds": 0.0,
                 "predict_seconds": 0.0,
@@ -135,9 +263,14 @@ def _baseline_evaluation(
         "model": model_name,
         "mae": detail["mae"].mean(),
         "mae_std": detail["mae"].std(ddof=1),
+        "mae_min": detail["mae"].min(),
+        "mae_max": detail["mae"].max(),
         "rmse": detail["rmse"].mean(),
+        "rmse_std": detail["rmse"].std(ddof=1),
         "r2": detail["r2"].mean(),
+        "r2_std": detail["r2"].std(ddof=1),
         "train_mae": detail["train_mae"].mean(),
+        "mae_gap": detail["mae"].mean() - detail["train_mae"].mean(),
         "fit_seconds": 0.0,
         "predict_seconds": 0.0,
         "feature_count": feature_count,
@@ -167,10 +300,13 @@ def cross_validate_model(
         validation_prediction = np.clip(model.predict(X.iloc[validation_index]), 0.0, 1.0)
         predict_seconds = time.perf_counter() - start
         oof[validation_index] = validation_prediction
+        train_metrics = regression_metrics(y.iloc[train_index], train_prediction)
         rows.append(
             {
                 "fold": fold,
-                "train_mae": regression_metrics(y.iloc[train_index], train_prediction)["mae"],
+                "train_mae": train_metrics["mae"],
+                "train_rmse": train_metrics["rmse"],
+                "train_r2": train_metrics["r2"],
                 **regression_metrics(y.iloc[validation_index], validation_prediction),
                 "fit_seconds": fit_seconds,
                 "predict_seconds": predict_seconds,
@@ -186,9 +322,14 @@ def cross_validate_model(
         "model": name,
         "mae": validation_mae,
         "mae_std": float(detail["mae"].std(ddof=1)),
+        "mae_min": float(detail["mae"].min()),
+        "mae_max": float(detail["mae"].max()),
         "rmse": float(detail["rmse"].mean()),
+        "rmse_std": float(detail["rmse"].std(ddof=1)),
         "r2": float(detail["r2"].mean()),
+        "r2_std": float(detail["r2"].std(ddof=1)),
         "train_mae": train_mae,
+        "mae_gap": validation_mae - train_mae,
         "fit_seconds": float(detail["fit_seconds"].sum()),
         "predict_seconds": float(detail["predict_seconds"].sum()),
         "feature_count": X.shape[1],
@@ -207,12 +348,14 @@ def compare_models(
     """Compare one baseline and all candidate families on identical folds."""
     candidates = dict(models or build_model_candidates())
     mean_baseline, mean_oof, mean_detail = _baseline_evaluation(
+        X,
         y,
         folds,
         X.shape[1],
         statistic="mean",
     )
     median_baseline, median_oof, median_detail = _baseline_evaluation(
+        X,
         y,
         folds,
         X.shape[1],
@@ -358,47 +501,42 @@ def randomized_model_search(
     n_iter: int = 8,
     random_state: int = RANDOM_STATE,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Run a bounded, reproducible manual randomized search.
+    """Run reproducible ``RandomizedSearchCV`` on supplied grouped folds."""
 
-    The function reuses the project's clipped prediction and metric logic. It
-    returns every trial so the absence of a meaningful gain is as traceable as
-    a winning configuration.
-    """
-    rows: list[dict[str, Any]] = []
-    samples = list(
-        ParameterSampler(
-            dict(parameter_space),
-            n_iter=n_iter,
-            random_state=random_state,
-        )
+    def clipped_negative_mae(
+        fitted: RegressorMixin,
+        features: pd.DataFrame,
+        target: pd.Series,
+    ) -> float:
+        prediction = np.clip(fitted.predict(features), 0.0, 1.0)
+        return -float(mean_absolute_error(target, prediction))
+
+    search = RandomizedSearchCV(
+        estimator=clone(estimator),
+        param_distributions=dict(parameter_space),
+        n_iter=n_iter,
+        scoring=clipped_negative_mae,
+        cv=list(folds),
+        random_state=random_state,
+        n_jobs=1,
+        refit=False,
+        return_train_score=True,
+        error_score="raise",
     )
-    for trial, parameters in enumerate(samples, start=1):
-        candidate = clone(estimator).set_params(**parameters)
-        summary, _, _ = cross_validate_model(
-            f"trial_{trial}",
-            candidate,
-            X,
-            y,
-            folds,
-        )
-        rows.append(
-            {
-                "trial": trial,
-                **parameters,
-                **{key: value for key, value in summary.items() if key != "model"},
-            }
-        )
-        logger.info("Tuning trial %d/%d: MAE %.6f", trial, len(samples), summary["mae"])
-    results = pd.DataFrame(rows).sort_values("mae").reset_index(drop=True)
-    parameter_names = list(parameter_space)
-    best_parameters = {
-        name: (
-            results.loc[0, name].item()
-            if hasattr(results.loc[0, name], "item")
-            else results.loc[0, name]
-        )
-        for name in parameter_names
-    }
+    search.fit(X, y)
+    raw = pd.DataFrame(search.cv_results_)
+    parameters = pd.DataFrame(raw["params"].tolist())
+    results = parameters.assign(
+        mae=-raw["mean_test_score"],
+        mae_std=raw["std_test_score"],
+        train_mae=-raw["mean_train_score"],
+        fit_seconds=raw["mean_fit_time"],
+        predict_seconds=raw["mean_score_time"],
+    )
+    results["mae_gap"] = results["mae"] - results["train_mae"]
+    results = results.sort_values("mae").reset_index(drop=True)
+    results.insert(0, "trial", np.arange(1, len(results) + 1))
+    best_parameters = dict(raw.loc[raw["mean_test_score"].idxmax(), "params"])
     return results, best_parameters
 
 

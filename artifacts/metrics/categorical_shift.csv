@@ -1,0 +1,4 @@
+feature,psi,total_variation_distance,largest_shift_category,largest_percentage_point_change,train_unique,test_unique,test_only_categories
+gameType,0.008440846320821697,0.010839999999999987,squad-fpp,0.5059999999999953,16,10,0
+mode_family,0.001211270357625052,0.003899999999999987,squad,0.30999999999999917,4,4,0
+ranking_system,0.0005560907518528538,0.006219999999999991,legacy,-0.6220000000000003,3,3,0

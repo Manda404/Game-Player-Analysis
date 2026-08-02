@@ -1,0 +1,2 @@
+model,development_rows,holdout_rows,train_mae,mae,rmse,r2,mae_gap,fit_seconds,predict_seconds,shared_games,decision_frozen_before_holdout,historical_limitation
+CatBoost,40128,9872,0.055769702918193303,0.06079691913623639,0.08659641114188939,0.9208266098266631,0.005027216218043085,3.394362708000699,0.009350332999019884,0,True,"independent of this audit cycle, but earlier EDA used all labeled rows"

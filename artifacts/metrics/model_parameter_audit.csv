@@ -1,0 +1,5 @@
+model,pre_audit_learning_parameters,audited_initial_learning_parameters,audited_technical_parameters,pre_audit_comparison_fair,audited_initial_comparison_fair
+Random Forest,"{""max_depth"": null, ""max_features"": 0.8, ""min_samples_leaf"": 2, ""n_estimators"": 250}",library defaults,"{""n_jobs"": -1, ""random_state"": 42}",False,True
+XGBoost,"{""colsample_bytree"": 0.85, ""learning_rate"": 0.05, ""max_depth"": 6, ""min_child_weight"": 3, ""n_estimators"": 500, ""reg_alpha"": null, ""reg_lambda"": null, ""subsample"": 0.85}",library defaults,"{""n_jobs"": -1, ""objective"": ""reg:squarederror"", ""random_state"": 42, ""verbosity"": 0}",False,True
+LightGBM,"{""colsample_bytree"": 0.85, ""learning_rate"": 0.05, ""min_child_samples"": 30, ""n_estimators"": 500, ""num_leaves"": 31, ""reg_alpha"": 0.0, ""reg_lambda"": 0.0, ""subsample"": 0.85}",library defaults,"{""n_jobs"": -1, ""random_state"": 42, ""verbosity"": -1}",False,True
+CatBoost,"{""depth"": 6, ""iterations"": 800, ""l2_leaf_reg"": 5.0, ""learning_rate"": 0.05}",library defaults,"{""allow_writing_files"": false, ""loss_function"": ""RMSE"", ""random_seed"": 42, ""verbose"": false}",False,True

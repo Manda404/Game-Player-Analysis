@@ -1,0 +1,84 @@
+[project]
+name = "game-player-analysis"
+version = "1.0.0"
+description = "A compact, reproducible analysis of the Gameloft player-ranking dataset"
+authors = [{name = "Manda Surel", email = "s239150.eps@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "pandas>=2.0.0,<3.0.0",
+    "numpy>=2.1.0,<3.0.0",
+    "matplotlib>=3.9.0,<4.0.0",
+    "seaborn>=0.13.0,<0.14.0",
+    "lightgbm>=4.7.0,<5.0.0",
+    "catboost>=1.2.10,<2.0.0",
+    "xgboost<3.0.0",
+    "scikit-learn>=1.9.0,<2.0.0",
+    "joblib>=1.4.0,<2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+    "pytest-cov>=4.0.0,<5.0.0",
+    "black>=24.0.0,<25.0.0",
+    "flake8>=7.0.0,<8.0.0",
+    "mypy>=1.0.0,<2.0.0",
+    "jupyter>=1.0.0,<2.0.0",
+    "ipython>=8.0.0,<9.0.0",
+]
+
+[tool.poetry]
+packages = [{include = "game_player_analysis", from = "src"}]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+no_site_packages = true
+
+[[tool.mypy.overrides]]
+module = [
+    "joblib.*",
+    "pandas.*",
+    "matplotlib.*",
+    "numpy",
+    "pytest",
+    "seaborn.*",
+    "sklearn.*",
+    "catboost.*",
+    "lightgbm.*",
+    "xgboost.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --cov=game_player_analysis --cov-report=term-missing"
+markers = [
+    "unit: fast, isolated tests with no real file/network I/O",
+    "integration: tests exercising multiple layers together (real file I/O, pandas, etc.)",
+]
+
+[tool.coverage.run]
+source = ["src/game_player_analysis"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

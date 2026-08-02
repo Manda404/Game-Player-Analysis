@@ -1,0 +1,28 @@
+{
+  "benchmark": "model_comparison.csv",
+  "feature_count": 16,
+  "features": [
+    "killRank",
+    "walkDist",
+    "rideDist",
+    "damages",
+    "kills",
+    "weapons",
+    "upgrades",
+    "heals",
+    "maxRank",
+    "walk_distance_per_match_minute",
+    "damage_per_kill",
+    "combat_activity",
+    "resource_activity",
+    "mode_solo",
+    "mode_duo",
+    "mode_squad"
+  ],
+  "model_class": "XGBRegressor",
+  "random_state": 42,
+  "raw_data_sha256": {
+    "test": "4dd388277253326c4155a8c87abac19fa4a70339675af9e4682affe4c1345956",
+    "train": "66ab317bb5fcc0df0e248127a25159f1dff9c3b8b16058281ecd6107b067f69b"
+  }
+}

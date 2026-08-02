@@ -47,10 +47,10 @@ st.set_page_config(
 
 PAGES = (
     "Découvrir",
-    "1 · Ajouter mes fichiers",
+    "1 · Fichiers",
     "2 · Explorer",
-    "3 · Comprendre le modèle",
-    "4 · Créer des prédictions",
+    "3 · Modèle",
+    "4 · Prédictions",
 )
 
 DISPLAY_NAMES = {
@@ -71,7 +71,8 @@ def _inject_style() -> None:
         """
         <style>
         .stApp { background: #f8fafc; color: #172033; }
-        .block-container { max-width: 1240px; padding-top: 1.25rem; padding-bottom: 3rem; }
+        .block-container { max-width: 1240px; padding-top: 4rem; padding-bottom: 3rem; }
+        header[data-testid="stHeader"] { background: rgba(248, 250, 252, .96); }
         [data-testid="stSidebar"] { background: #10233b; }
         [data-testid="stSidebar"] * { color: #edf5ff; }
         .brand { display: flex; align-items: center; gap: .7rem; margin: .1rem 0 .95rem; }
@@ -110,8 +111,23 @@ def _inject_style() -> None:
             background: white; border: 1px solid #dfe7f0; border-radius: 12px;
             padding: .68rem .78rem;
         }
-        div[data-testid="stRadio"] label p { font-weight: 600; }
+        div[data-testid="stRadio"] > div { column-gap: .45rem; row-gap: .45rem; flex-wrap: wrap; }
+        div[data-testid="stRadio"] label {
+            background: white; border: 1px solid #d7e2ed; border-radius: 999px;
+            margin: 0; min-height: 0; padding: .36rem .7rem;
+            transition: background .15s ease, border-color .15s ease;
+        }
+        div[data-testid="stRadio"] label:hover { background: #f0f7fc; border-color: #9bc8e7; }
+        div[data-testid="stRadio"] label:has(input:checked) { background: #e5f2fb; border-color: #2878b5; }
+        div[data-testid="stRadio"] label:has(input:checked) p { color: #125987; }
+        div[data-testid="stRadio"] label > div:first-child { display: none; }
+        div[data-testid="stRadio"] label p { font-weight: 650; font-size: .92rem; }
         .stButton > button[kind="primary"] { border-radius: 9px; font-weight: 700; }
+        @media (max-width: 900px) {
+            .block-container { padding-top: 3.25rem; }
+            .topline { display: none; }
+            div[data-testid="stRadio"] label { padding: .3rem .55rem; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -164,7 +180,7 @@ def _require_train() -> pd.DataFrame | None:
         st.button(
             "Ajouter mes fichiers",
             on_click=_navigate_to,
-            args=("1 · Ajouter mes fichiers",),
+            args=("1 · Fichiers",),
         )
         return None
     return train
@@ -245,7 +261,7 @@ def _render_home() -> None:
         "Commencer avec mes fichiers",
         type="primary",
         on_click=_navigate_to,
-        args=("1 · Ajouter mes fichiers",),
+        args=("1 · Fichiers",),
     )
     st.markdown(
         "<div class='section-title'>Votre parcours en quatre étapes</div>", unsafe_allow_html=True
@@ -665,7 +681,7 @@ def _render_predictions() -> None:
         st.button(
             "Ajouter mon fichier test",
             on_click=_navigate_to,
-            args=("1 · Ajouter mes fichiers",),
+            args=("1 · Fichiers",),
         )
     else:
         selected_model = st.session_state.get("active_model_result")
@@ -755,10 +771,10 @@ def main() -> None:
     st.divider()
     pages = {
         "Découvrir": _render_home,
-        "1 · Ajouter mes fichiers": _render_uploads,
+        "1 · Fichiers": _render_uploads,
         "2 · Explorer": _render_exploration,
-        "3 · Comprendre le modèle": _render_model_overview,
-        "4 · Créer des prédictions": _render_predictions,
+        "3 · Modèle": _render_model_overview,
+        "4 · Prédictions": _render_predictions,
     }
     pages[page]()
 

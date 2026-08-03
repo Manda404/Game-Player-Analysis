@@ -48,7 +48,7 @@ Le PDF officiel confirme :
   et Modeling doivent être visibles dans un notebook commenté ;
 - la méthode et la lisibilité comptent plus que le seul score.
 
-Le fichier Gameloft-Data-Science-Overview/GamePlayerAnalysis-Overview.pdf du
+Le fichier reports/game_player_analysis_report_fr.pdf du
 ZIP est un ancien rapport du projet, pas le sujet officiel.
 
 ## Audit des fichiers actifs

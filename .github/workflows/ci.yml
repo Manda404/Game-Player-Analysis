@@ -40,7 +40,7 @@ jobs:
         run: poetry run pytest -q
 
       - name: Check formatting
-        run: poetry run black --check app src tests scripts
+        run: poetry run black --check src tests scripts
 
       - name: Run linter
-        run: poetry run flake8 app src tests scripts
+        run: poetry run flake8 src tests scripts

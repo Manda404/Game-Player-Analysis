@@ -16,7 +16,6 @@ dependencies = [
     "xgboost<3.0.0",
     "scikit-learn>=1.9.0,<2.0.0",
     "joblib>=1.4.0,<2.0.0",
-    "streamlit>=1.33.0,<2.0.0",
 ]
 
 [tool.poetry]
@@ -59,7 +58,6 @@ module = [
     "numpy",
     "pytest",
     "seaborn.*",
-    "streamlit.*",
     "sklearn.*",
     "catboost.*",
     "lightgbm.*",

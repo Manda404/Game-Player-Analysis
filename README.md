@@ -80,51 +80,12 @@ Run the command-line pipeline:
 poetry run python scripts/run_analysis.py
 ```
 
-## Private Streamlit interface
-
-The interface offers an accessible overview of the analysis, private CSV upload,
-exploration, validation and SHAP diagnostics, bounded CatBoost tuning, and
-prediction export. Uploaded files are never written by the app: they stay in the
-Streamlit session memory.
-
-```bash
-poetry run streamlit run app/app.py
-```
-
-Upload a semicolon-separated official train file containing
-`winRankPercentage`, then optionally a same-schema test file without the target.
-The model is explicitly post-match: `killRank` is required and must not be
-presented as an early-game signal.
-
-An evaluated CatBoost variant is compared with the reference model on the same
-grouped holdout. It becomes the active session model only when its MAE is
-strictly lower; subsequent predictions then use that variant. This adoption does
-not modify the repository or published model, preventing a public-app visitor
-from overwriting a reproducible version.
-
-## CI/CD and Streamlit deployment
+## Continuous integration
 
 Continuous integration is defined in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml): every pull request to
 `main` and every push to `main` run tests, Black, and Flake8 with Python 3.12 in
 GitHub Actions.
-
-Continuous deployment is handled natively by Streamlit Community Cloud once the
-app is linked to the repository: new commits to the tracked branch are deployed
-automatically. Theme and upload-limit configuration are versioned in
-[`.streamlit/config.toml`](.streamlit/config.toml).
-
-To create the app once in Streamlit Community Cloud:
-
-1. In your Streamlit workspace, click **Create app**.
-2. Choose `Manda404/Game-Player-Analysis`, branch `main`, and entry point
-   `app/app.py`.
-3. Keep Python 3.12 and click **Deploy**.
-
-The application requires no secrets. Visitor CSV files remain in memory, so they
-are neither committed to GitHub nor sent to an external API. Consult the
-[official Streamlit deployment documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy)
-if you want to select a custom URL.
 
 Run inference from a new official CSV:
 
@@ -138,8 +99,8 @@ Quality checks:
 
 ```bash
 poetry run pytest
-poetry run black --check app src tests scripts
-poetry run flake8 app src tests scripts
+poetry run black --check src tests scripts
+poetry run flake8 src tests scripts
 ```
 
 ## Architecture
@@ -165,9 +126,8 @@ src/game_player_analysis/
 - figures: `artifacts/figures/`;
 - tuning decision: `artifacts/metadata/tuning_decision.json`;
 - final decision: `artifacts/metadata/final_selection_decision.json`;
-- CLI log: `artifacts/logs/analysis.log`;
 - predictions: `data/output/submission.csv`.
 
-The [final report](docs/final_report.md) summarizes the conclusions. Initial
-audits and the coverage matrix are in [`docs/review/`](docs/review/). The
-pre-refactoring state remains available in `dist/pre_refactor_2026-08-02.zip`.
+The final report is available in both
+[English](reports/game_player_analysis_report_en.pdf) and
+[French](reports/game_player_analysis_report_fr.pdf).

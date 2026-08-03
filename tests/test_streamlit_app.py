@@ -16,11 +16,11 @@ def test_streamlit_guided_journey_renders_without_uploaded_data():
     assert len(app.exception) == 0
     assert len(app.radio) == 1
 
-    app.radio[0].set_value("3 · Modèle").run(timeout=30)
+    app.radio[0].set_value("3 · Model").run(timeout=30)
     assert len(app.exception) == 0
     assert len(app.tabs) == 2
     assert len(app.metric) >= 3
 
-    app.radio[0].set_value("4 · Prédictions").run(timeout=30)
+    app.radio[0].set_value("4 · Predictions").run(timeout=30)
     assert len(app.exception) == 0
     assert len(app.button) >= 1

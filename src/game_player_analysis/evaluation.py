@@ -43,13 +43,13 @@ def snap_to_rank_grid(
 def overfitting_comment(train_mae: float, validation_mae: float) -> str:
     """Turn the train/validation MAE gap into a readable diagnostic."""
     if validation_mae <= 0:
-        return "non évalué"
+        return "not assessed"
     relative_gap = max(0.0, validation_mae - train_mae) / validation_mae
     if relative_gap < 0.05:
-        return "faible écart"
+        return "small gap"
     if relative_gap < 0.20:
-        return "écart modéré"
-    return "écart élevé"
+        return "moderate gap"
+    return "large gap"
 
 
 def error_by_match_size(

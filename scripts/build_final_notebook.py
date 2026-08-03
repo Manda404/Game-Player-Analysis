@@ -34,34 +34,34 @@ def build_notebook() -> None:
     notebook["cells"] = [
         markdown(
             """
-# Game Player Analysis — revue Data Science finale
+# Game Player Analysis — Final Data Science Review
 
-**Livrable principal exécuté.** L'objectif officiel est de prédire
-`winRankPercentage`, le score de classement de l'équipe du joueur normalisé
-entre 0 (dernière place) et 1 (première place), à partir de statistiques
-post-partie. Une ligne décrit un joueur, tandis que la cible d'équipe est
-répétée sur les joueurs observés de cette équipe.
+**Executed primary deliverable.** In this notebook, I predict
+`winRankPercentage`, the player's team's normalized final ranking from 0 (last
+place) to 1 (first place), using post-match statistics. Each row describes one
+player, while the team-level target is repeated for the observed players from
+that team.
 
-Ce notebook privilégie la justesse des interprétations et la traçabilité :
-chaque résultat modélisé est out-of-fold, le `gameId` est groupé, et le fichier
-test officiel de mai reste sans labels et hors de toute sélection de modèle.
+I prioritize sound interpretation and traceability: every modeled result is
+out-of-fold, I group by `gameId`, and I keep the official unlabeled May test
+file outside every model-selection decision.
 """
         ),
         markdown(
             """
-## 1. Cadre officiel, métrique et questions
+## 1. Official setting, metric, and questions
 
-- **Train :** 50 000 lignes attribuées à janvier–avril 2024.
-- **Test :** 5 000 lignes attribuées à mai 2024.
-- **Métrique principale :** MAE, complétée par RMSE et R².
-- **Question modèle :** quelle précision post-match obtient-on avec les
-  variables individuelles, et quelle part provient de `killRank` ?
-- **Question produit :** les comportements mobilité, combat et ressources
-  restent-ils informatifs sans le classement post-match ?
+- **Train:** 50,000 rows assigned to January–April 2024.
+- **Test:** 5,000 rows assigned to May 2024.
+- **Primary metric:** MAE, complemented by RMSE and R².
+- **Model question:** what post-match accuracy do I obtain from individual
+  variables, and how much comes from `killRank`?
+- **Product question:** do mobility, combat, and resource behaviours remain
+  informative without the post-match ranking?
 
-Le sujet affirme que `date` est la date du match. Cette définition sera testée,
-pas supposée vraie. `maxRank` définit la grille de classement déclarée ; ce
-n'est ni le nombre réel de joueurs ni le nombre de lignes observées par match.
+The brief states that `date` is the match date. I test that definition rather
+than assume it is true. `maxRank` defines the reported ranking grid; it is
+neither the actual player count nor the number of observed rows per match.
 """
         ),
         code(
@@ -91,23 +91,126 @@ configure_logging()
         ),
         markdown(
             """
-## 2. Exécution reproductible du pipeline
+## 2. Reproducible execution and reviewed artifacts
 
-La cellule suivante repart des CSV bruts et exécute une seule chaîne commune :
-validation, nettoyage, EDA, feature engineering, GroupKFold, quatre ensembles,
-holdout groupé gelé, tuning borné, ablations, drift, diagnostics, modèle final,
-manifeste et soumission. La seed de modélisation vaut 42 ; les empreintes
-SHA-256 des données sont conservées dans le manifeste.
+By default, I load the reviewed published artifacts so this notebook stays fast
+to inspect and its figures remain visible without re-fitting CatBoost. I set
+`REBUILD_ARTIFACTS = True` only when I want to recompute the full pipeline from
+the private raw CSV files: validation, cleaning, EDA, feature engineering,
+GroupKFold, four model families, a frozen grouped holdout, bounded tuning,
+ablations, drift, diagnostics, the final model, its manifest, and the
+submission. I use modeling seed 42 and retain the data SHA-256 fingerprints in
+the manifest.
 """
         ),
         code(
             """
-results = run_final_analysis(tuning_iterations=8)
+REBUILD_ARTIFACTS = False
+
+if REBUILD_ARTIFACTS:
+    results = run_final_analysis(tuning_iterations=8)
+else:
+    import json
+
+    from game_player_analysis.cleaning import clean_ranking_sentinels
+    from game_player_analysis.config import ARTIFACT_DIR
+    from game_player_analysis.data import load_train_test
+
+    table_names = (
+        "dataset_summary",
+        "data_quality",
+        "date_integrity",
+        "sampling_coverage",
+        "numeric_profile",
+        "game_modes",
+        "kpi_evaluation",
+        "feature_profiles",
+        "distribution_shift",
+        "categorical_shift",
+        "categorical_shift_detail",
+        "fold_audit",
+        "final_holdout_audit",
+        "final_holdout_evaluation",
+        "holdout_audit",
+        "holdout_performance",
+        "model_parameter_audit",
+        "pre_audit_configuration_comparison",
+        "initial_model_comparison",
+        "model_comparison",
+        "model_fold_uncertainty",
+        "feature_ablation",
+        "scenario_comparison",
+        "tuning_trials",
+        "tuning_comparison",
+        "subgroup_errors",
+        "largest_errors",
+        "permutation_importance",
+        "shap_global_importance",
+        "shap_sample",
+        "shap_values",
+    )
+    tables = {
+        name: pd.read_csv(ARTIFACT_DIR / "metrics" / f"{name}.csv")
+        for name in table_names
+    }
+    for name in ("target_grid", "adversarial_validation", "drift_limitations"):
+        tables[name] = pd.read_csv(
+            ARTIFACT_DIR / "metrics" / f"{name}.csv", index_col=0
+        )["value"]
+
+    _, test_raw = load_train_test()
+    metadata_dir = ARTIFACT_DIR / "metadata"
+    selection_decision = json.loads(
+        (metadata_dir / "final_selection_decision.json").read_text(encoding="utf-8")
+    )
+    tuning_decision = json.loads(
+        (metadata_dir / "tuning_decision.json").read_text(encoding="utf-8")
+    )
+    figure_names = {
+        "figure_date_integrity": "01_date_integrity.png",
+        "figure_data_quality": "02_data_quality.png",
+        "figure_sampling": "03_sampling_structure.png",
+        "figure_target": "04_target_distribution.png",
+        "figure_profiles": "05_feature_target_profiles.png",
+        "figure_correlations": "06_targeted_correlations.png",
+        "figure_validation": "07_validation_strategies.png",
+        "figure_drift": "07b_train_test_drift.png",
+        "figure_ablation": "08_feature_ablation.png",
+        "figure_models": "09_model_diagnostics.png",
+        "figure_tuning": "10_tuning_results.png",
+        "figure_errors": "11_error_diagnostics.png",
+        "figure_importance": "12_permutation_importance.png",
+        "figure_shap": "13_catboost_shap_summary.png",
+    }
+    paths = {
+        "model": ARTIFACT_DIR / "model.joblib",
+        "manifest": ARTIFACT_DIR / "model_manifest.json",
+        "submission": PROJECT_ROOT / "data" / "output" / "submission.csv",
+        "tuning_decision": metadata_dir / "tuning_decision.json",
+        "selection_decision": metadata_dir / "final_selection_decision.json",
+        **{
+            f"table_{name}": ARTIFACT_DIR / "metrics" / f"{name}.csv"
+            for name in (*table_names, "target_grid", "adversarial_validation", "drift_limitations")
+        },
+        **{
+            key: ARTIFACT_DIR / "figures" / filename
+            for key, filename in figure_names.items()
+        },
+    }
+    results = {
+        "test": clean_ranking_sentinels(test_raw),
+        "winner": selection_decision["selected_configuration"],
+        "tables": tables,
+        "paths": paths,
+        "tuning_decision": tuning_decision,
+        "selection_decision": selection_decision,
+    }
+
 tables = results["tables"]
-display(Markdown(f"**Modèle publié : {results['winner']}**"))
+display(Markdown(f"**Published model: {results['winner']}**"))
 """
         ),
-        markdown("## 3. Chargement, contrat de données et nettoyage"),
+        markdown("## 3. Loading, data contract, and cleaning"),
         code(
             """
 display(tables["dataset_summary"])
@@ -116,12 +219,11 @@ display(tables["data_quality"].pivot(index="check", columns="dataset", values="r
         ),
         markdown(
             """
-Il n'y a ni valeur manquante brute ni doublon exact. Cela ne signifie pas que
-toutes les valeurs sont sémantiquement disponibles : `rankPts=-1` est une
-sentinelle documentée ; `killPts=0` et `winPts=0` sont manquants lorsque le
-système `rankPts` est actif. Le nettoyage les convertit en valeurs absentes et
-ajoute des indicateurs, sans supprimer de ligne. Ces scores ne sont pas retenus
-dans le modèle final, ce qui évite de mélanger plusieurs systèmes de ranking.
+I find neither raw missing values nor exact duplicates. That does not mean every
+value is semantically available: `rankPts=-1` is a documented sentinel, and
+`killPts=0` and `winPts=0` are missing when the `rankPts` system is active. I
+convert them to missing values and add availability flags without dropping rows.
+I exclude these scores from the final model so that I do not mix ranking systems.
 """
         ),
         code(
@@ -131,7 +233,7 @@ display(quality.loc[quality["check"].str.contains("Pts|without|invalid")])
 display(Image(filename=str(results["paths"]["figure_data_quality"])))
 """
         ),
-        markdown("## 4. Audit de la date et de l'échantillonnage"),
+        markdown("## 4. Date and sampling audit"),
         code(
             """
 display(tables["date_integrity"])
@@ -140,12 +242,11 @@ display(Image(filename=str(results["paths"]["figure_date_integrity"])))
         ),
         markdown(
             """
-**Conclusion de l'audit temporel.** Pour 100 % des `gameId` valides ayant
-plusieurs lignes, les dates diffèrent entre joueurs ; l'étendue médiane atteint
-environ 45 jours dans le train. Les dates sont donc incompatibles avec la
-définition officielle au niveau ligne. La cause technique n'est pas observable
-dans les fichiers : on les qualifie d'incohérentes/corrompues, sans inventer une
-explication. Le temps ne devient qu'un stress test pseudo-temporel.
+**My temporal-audit conclusion.** In 100% of valid multi-row `gameId`s, dates
+differ between players; the median span is about 45 days in train. Dates are
+therefore incompatible with their official row-level definition. I cannot
+observe the technical cause in the files, so I call them inconsistent/corrupted
+rather than invent an explanation. Time is only a pseudo-temporal stress test.
 """
         ),
         code(
@@ -156,13 +257,13 @@ display(Image(filename=str(results["paths"]["figure_sampling"])))
         ),
         markdown(
             """
-Seulement ~2,34 % des lignes train ont un coéquipier observé et près de 98,82 %
-des groupes `(gameId, teamId)` sont des singletons. Les agrégats équipe/lobby
-sont donc **rejetés** : ils mesureraient surtout le mécanisme d'échantillonnage,
-pas la performance complète de l'équipe.
+Only about 2.34% of train rows have an observed teammate, and nearly 98.82% of
+`(gameId, teamId)` groups are singletons. I therefore **reject** team- and
+lobby-level aggregates: they would mostly measure the sampling mechanism, not
+complete team performance.
 """
         ),
-        markdown("## 5. Drift train/test"),
+        markdown("## 5. Train/test drift"),
         code(
             """
 display(tables["distribution_shift"].head(16))
@@ -174,19 +275,19 @@ display(Image(filename=str(results["paths"]["figure_drift"])))
         ),
         markdown(
             """
-Le drift est mesuré par PSI, KS, Wasserstein normalisée, variations de masse à
-zéro, déplacements catégoriels et validation adversariale. Le PSI numérique
-maximal vaut environ 0,0051, le PSI catégoriel maximal 0,0084 et le ROC AUC
-adversarial 0,493 : aucune dérive matérielle n'est détectée sur le contrat de
-features mesuré. Cela ne prouve pas l'identité des distributions. Sans cible
-test, le drift de performance/concept reste inconnu ; avec la date incohérente,
-le drift temporel n'est pas interprétable.
+I measure drift with PSI, KS, normalized Wasserstein distance, zero-mass
+changes, categorical shifts, and adversarial validation. The maximum numeric
+PSI is about 0.0051, the maximum categorical PSI is 0.0084, and adversarial ROC
+AUC is 0.493: I detect no material drift in the measured feature contract. This
+does not prove identical distributions. Without test targets, performance and
+concept drift remain unknown; with inconsistent dates, temporal drift is not
+interpretable.
 """
         ),
-        markdown("## 6. Analyse exploratoire et hypothèses"),
+        markdown("## 6. Exploratory analysis and hypotheses"),
         code(
             """
-display(tables["target_grid"].to_frame("valeur"))
+display(tables["target_grid"].to_frame("value"))
 display(tables["numeric_profile"])
 display(Image(filename=str(results["paths"]["figure_target"])))
 display(Image(filename=str(results["paths"]["figure_profiles"])))
@@ -195,27 +296,27 @@ display(Image(filename=str(results["paths"]["figure_correlations"])))
         ),
         markdown(
             """
-Hypothèses examinées : (1) la mobilité reflète fortement la progression dans
-la partie ; (2) combat et ressources ajoutent une information comportementale ;
-(3) `killRank`, déjà calculé après le match, doit dominer le scénario post-match ;
-(4) les modes changent l'échelle des comportements. Les profils par quantiles
-et leurs intervalles à 95 % montrent les relations non linéaires ; la matrice
-de Spearman reste ciblée pour ne pas masquer ces effets.
+I examine four hypotheses: (1) mobility strongly reflects match progression;
+(2) combat and resources add behavioural information; (3) `killRank`, already
+computed after the match, should dominate the post-match scenario; and (4)
+modes change the scale of behaviours. Quantile profiles and their 95% intervals
+show nonlinear relationships, while I keep the Spearman matrix focused so those
+effects remain visible.
 """
         ),
-        markdown("## 7. KPI analytiques"),
+        markdown("## 7. Analytical KPIs"),
         code('display(tables["kpi_evaluation"])'),
         markdown(
             """
-Chaque ratio a une règle explicite pour les dénominateurs nuls. Les KPI
-`total_distance`, mobilité/seconde et headshot ratio restent descriptifs car
-ils sont redondants, utilisent `gameTime` qui n'est pas un temps de survie, ou
-sont trop clairsemés. `damage_per_kill`, `combat_activity` et
-`resource_activity` entrent dans l'ablation : leur maintien dépend de leur gain
-mesuré, pas de leur plausibilité seule.
+I define an explicit rule for every zero denominator. I keep `total_distance`,
+mobility per second, and headshot ratio descriptive because they are redundant,
+use `gameTime` rather than survival time, or are too sparse. I include
+`damage_per_kill`, `combat_activity`, and `resource_activity` in the ablation:
+I retain them only when they show measured value, not because they sound
+plausible.
 """
         ),
-        markdown("## 8. Features et ablation progressive"),
+        markdown("## 8. Features and progressive ablation"),
         code(
             """
 display(tables["feature_ablation"].set_index("stage"))
@@ -225,15 +326,14 @@ display(Image(filename=str(results["paths"]["figure_ablation"])))
         ),
         markdown(
             """
-La mobilité produit le principal gain comportemental ; combat et ressources
-améliorent ensuite modestement la MAE. L'ajout de `killRank` fait passer la MAE
-d'environ 0,0927 à 0,0615 : le modèle publié est donc explicitement un modèle
-**post-match**, et non une prédiction early-game. La projection sur la grille
-`maxRank` améliore légèrement la MAE mais dégrade le RMSE ; elle est réservée à
-la soumission, avec cette contrepartie documentée.
+Mobility produces my main behavioural gain; combat and resources then improve
+MAE modestly. Adding `killRank` reduces MAE from about 0.0927 to 0.0615, so I
+explicitly describe the published model as **post-match**, not as early-game
+prediction. Snapping to the `maxRank` grid improves MAE slightly but worsens
+RMSE; I reserve it for the submission and document that trade-off.
 """
         ),
-        markdown("## 9. Validation et contrôles de fuite"),
+        markdown("## 9. Validation and leakage checks"),
         code(
             """
 display(tables["fold_audit"])
@@ -246,16 +346,15 @@ display(Image(filename=str(results["paths"]["figure_validation"])))
         ),
         markdown(
             """
-Un holdout groupé est gelé avant la sélection. Les 40 128 lignes restantes
-alimentent le GroupKFold à 5 folds ; les valeurs malformées répétées sont
-groupées conservativement et aucun identifiant ne traverse une partition. Un
-split aléatoire de lignes expose plus de la moitié de sa validation à des matchs
-déjà vus. Le stress test Jan–mars → avril reste non chronologique puisque
-`date` est incohérente. Après gel de la décision, CatBoost atteint environ
-0,06080 de MAE sur les 9 872 lignes du holdout du cycle.
+I freeze a grouped holdout before model selection. The remaining 40,128 rows
+feed 5-fold GroupKFold; I group repeated malformed values conservatively and no
+identifier crosses a partition. A row-random split exposes more than half of its
+validation rows to already seen matches. The January–March → April stress test
+remains non-chronological because `date` is inconsistent. After freezing the
+decision, CatBoost reaches about 0.06080 MAE on the cycle's 9,872-row holdout.
 """
         ),
-        markdown("## 10. Justification du nombre de folds"),
+        markdown("## 10. Selecting the number of folds"),
         code(
             """
 fold_metrics_path = PROJECT_ROOT / "artifacts" / "metrics" / "fold_count_sensitivity.csv"
@@ -283,22 +382,22 @@ display(Image(filename=str(fold_figure_path)))
         ),
         markdown(
             """
-L'étude compare `GroupKFold` avec K=3, 5, 7 et 10 sur les mêmes 40 128 lignes
-de développement ; le holdout final reste fermé. CatBoost gagne XGBoost dans
-les 25 folds cumulés. Sept folds affiche une MAE nominalement plus basse que
-cinq (gain de **0,000189**), mais cet écart est inférieur à l'erreur standard
-des folds et provient aussi d'apprentissages mécaniquement plus grands.
+I compare `GroupKFold` with K=3, 5, 7, and 10 on the same 40,128 development
+rows while keeping the final holdout closed. CatBoost beats XGBoost in all 25
+combined folds. Seven folds reports a nominally lower MAE than five (a
+**0.000189** gain), but that gap is below the folds' standard error and also
+comes from mechanically larger training sets.
 
-**Décision : 5 folds.** Chaque validation conserve environ 8 026 lignes de
-matchs indépendants, la décision CatBoost est déjà stable dans les cinq folds,
-et sept folds alourdit sensiblement le calcul. Dix folds double au moins la
-charge mesurée, réduit la validation à environ 4 013 lignes et augmente la
-dispersion. Le ratio de temps exact dépend de la machine ; il est affiché dans
-la figure. Choisir K=7 uniquement parce que son score affiché est le plus faible
-reviendrait à optimiser le protocole après observation des résultats.
+**My decision: 5 folds.** Each validation set retains about 8,026 independent
+match rows, the CatBoost choice is already stable in all five folds, and seven
+folds add meaningful computational cost. Ten folds at least doubles the
+measured cost, reduces validation to about 4,013 rows, and increases dispersion.
+The exact time ratio depends on the machine and is shown in the figure. Choosing
+K=7 solely because its displayed score is lowest would optimize the protocol
+after seeing results.
 """
         ),
-        markdown("## 11. Baselines et comparaison initiale"),
+        markdown("## 11. Baselines and initial comparison"),
         code(
             """
 display(tables["initial_model_comparison"].set_index("rank"))
@@ -309,32 +408,32 @@ display(Image(filename=str(results["paths"]["figure_models"])))
         ),
         markdown(
             """
-Les `DummyRegressor` moyenne/médiane et Ridge constituent les baselines. Les
-quatre ensembles utilisent leurs hyperparamètres d'apprentissage par défaut,
-avec seulement seed, parallélisme, objectif et verbosité explicités. CatBoost
-bat XGBoost d'environ 0,0020 MAE et dans les cinq folds. Le rejeu des anciennes
-configurations personnalisées ne donnait à XGBoost qu'un avantage de 0,000054 :
-ce pré-réglage expliquait l'inversion historique du gagnant.
+I use mean/median `DummyRegressor` models and Ridge as baselines. The four
+ensembles use library-default learning hyperparameters, with only the seed,
+parallelism, objective, and verbosity stated explicitly. CatBoost beats XGBoost
+by about 0.0020 MAE and in all five folds. Replaying the earlier customized
+configurations gives XGBoost only a 0.000054 advantage; that pre-tuning explains
+the historical reversal of the winner.
 """
         ),
-        markdown("## 12. Tuning borné et décision anti-surajustement"),
+        markdown("## 12. Bounded tuning and anti-overfitting decision"),
         code(
             """
 display(tables["tuning_trials"].sort_values("mae").head(8))
 display(tables["tuning_comparison"])
-display(pd.Series(results["tuning_decision"], name="décision").to_frame())
+display(pd.Series(results["tuning_decision"], name="decision").to_frame())
 display(Image(filename=str(results["paths"]["figure_tuning"])))
 """
         ),
         markdown(
             """
-Huit configurations CatBoost sont testées par `RandomizedSearchCV` sur les
-mêmes folds groupés. Le meilleur essai (0,061671) dégrade la configuration par
-défaut (0,061448) de 0,000223 ; le seuil de gain matériel de 0,0001 n'est pas
-atteint. Le tuning est rejeté avant ouverture du holdout final.
+I test eight CatBoost configurations with `RandomizedSearchCV` on the same
+grouped folds. The best trial (0.061671) is worse than the default configuration
+(0.061448) by 0.000223; it does not meet the 0.0001 material-gain threshold. I
+reject tuning before opening the final holdout.
 """
         ),
-        markdown("## 13. Interprétabilité SHAP et analyse d'erreurs"),
+        markdown("## 13. SHAP interpretability and error analysis"),
         code(
             """
 display(tables["permutation_importance"].head(16))
@@ -355,29 +454,27 @@ display(tables["largest_errors"].head(10))
         ),
         markdown(
             """
-La permutation et TreeSHAP apportent deux lectures complémentaires. La
-permutation mesure la perte de MAE lorsqu'une variable est mélangée ; TreeSHAP
-explique le sens et l'amplitude de la contribution de chaque variable pour
-chaque prédiction. CatBoost calcule TreeSHAP nativement sur 2 000 lignes tirées
-de façon déterministe parmi les 9 872 lignes du holdout, après le choix du
-modèle. Le pipeline vérifie que la somme des valeurs SHAP et de la valeur
-attendue reconstruit chaque prédiction brute.
+Permutation and TreeSHAP give me complementary views. Permutation measures the
+MAE loss when I shuffle one variable; TreeSHAP explains the direction and size
+of each feature's contribution to every prediction. CatBoost computes TreeSHAP
+natively on a deterministic sample of 2,000 rows from the 9,872-row holdout,
+after I select the model. The pipeline verifies that SHAP values plus the
+expected value reconstruct each raw prediction.
 
-Les deux diagnostics placent `killRank` au premier rang, puis la marche par
-minute, `kills` et `maxRank`. Sur le panneau SHAP, une contribution positive
-augmente le classement prédit et une contribution négative le diminue ; la
-couleur représente une valeur faible (bleu) ou élevée (rouge) **au sein de la
-variable affichée**, et non une unité comparable entre variables. Ces résultats
-décrivent des dépendances prédictives post-match, pas des effets causaux.
+Both diagnostics place `killRank` first, followed by walking distance per
+minute, `kills`, and `maxRank`. In the SHAP panel, a positive contribution raises
+the predicted ranking and a negative contribution lowers it; color represents a
+low (blue) or high (red) value **within the displayed feature**, not a unit that
+is comparable across features. I interpret these results as post-match
+predictive dependencies, not causal effects.
 
-Les modes spéciaux et les petites grilles affichent les erreurs les plus hautes,
-mais leurs effectifs sont faibles : ce sont des alertes, pas des conclusions
-stables. Les résidus montrent une régression vers la moyenne aux cibles élevées
-et quelques erreurs extrêmes ; les cas les plus difficiles sont exportés pour
-inspection reproductible.
+Special modes and small grids show the largest errors, but their samples are
+small: I treat them as alerts rather than stable conclusions. Residuals show
+regression to the mean for high targets and a few extreme errors; I export the
+hardest cases for reproducible inspection.
 """
         ),
-        markdown("## 14. Contrat d'inférence"),
+        markdown("## 14. Inference contract"),
         code(
             """
 submission_check = predict_frame(
@@ -390,32 +487,32 @@ assert list(submission_check.columns) == [
 assert submission_check["winRankPercentage"].between(0, 1).all()
 assert len(submission_check) == 5_000
 display(submission_check.head())
-display(pd.Series(results["paths"], name="chemin").tail(8).to_frame())
+display(pd.Series(results["paths"], name="path").tail(8).to_frame())
 """
         ),
         markdown(
             """
-Le bundle impose l'ordre exact des 16 features, vérifie son SHA-256 et refuse
-les colonnes officielles manquantes ou les prédictions non finies. La soumission
-préserve l'ordre des 5 000 lignes et contient uniquement les trois identifiants
-et la cible bornée/projetée sur la grille légale.
+The bundle enforces the exact order of the 16 features, verifies its SHA-256,
+and rejects missing official columns or non-finite predictions. The submission
+preserves the 5,000-row order and contains only the three identifiers plus the
+target bounded and snapped to the legal grid.
 """
         ),
         markdown(
             """
-## 15. Conclusion, limites et prochaines étapes
+## 15. Conclusion, limitations, and next steps
 
-CatBoost par défaut atteint une MAE GroupKFold développement d'environ
-**0,06145**, puis **0,06080** avec un R² de **0,92083** sur le holdout groupé du
-cycle. Sans `killRank`, la MAE comportementale est d'environ **0,09266**. La
-principale conclusion n'est donc pas seulement le score : `killRank` change la
-nature du cas d'usage.
+With the default CatBoost configuration, I achieve about **0.06145** development
+GroupKFold MAE and then **0.06080** MAE with **0.92083** R² on the cycle's
+grouped holdout. Without `killRank`, my behavioural MAE is about **0.09266**.
+My main conclusion is therefore not only the score: `killRank` changes the use
+case itself.
 
-Limites irréductibles : test sans cible, chronologie inutilisable, couverture
-très partielle des matchs/équipes, faible support de certains modes et absence
-de snapshots early-game. Pour un déploiement produit, il faut collecter une
-date de match cohérente, les rosters complets, un split futur réellement
-étiqueté et des variables disponibles au moment précis de la décision.
+The irreducible limitations are an unlabeled test set, unusable chronology,
+highly partial match/team coverage, limited support for some modes, and no
+early-game snapshots. For a production deployment, I would collect a coherent
+match date, complete rosters, a genuinely labeled future split, and variables
+available at the exact time of the decision.
 """
         ),
     ]

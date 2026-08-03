@@ -1,69 +1,71 @@
 # Game Player Analysis
 
-Analyse Data Science reproductible du test technique Gameloft : prédire
-`winRankPercentage`, le classement normalisé de l'équipe d'un joueur après une
-partie de Battle Royale (`0` dernière place, `1` première place).
+Reproducible Data Science analysis for the Gameloft technical assessment: predict
+`winRankPercentage`, a player's team's normalized final ranking after a Battle
+Royale match (`0` for last place, `1` for first place).
 
-Le livrable principal est le notebook exécuté
-[`notebooks/game_player_analysis.ipynb`](notebooks/game_player_analysis.ipynb).
-Il repart des CSV bruts et présente Data Cleaning, Analysis & Visualization,
-Feature Engineering, Modeling, interprétabilité, erreurs et inférence.
+The primary deliverable is the executed
+[`notebooks/game_player_analysis.ipynb`](notebooks/game_player_analysis.ipynb)
+notebook. Starting from the raw CSV files, it covers Data Cleaning, Analysis &
+Visualization, Feature Engineering, Modeling, interpretability, error analysis,
+and inference.
 
-## Résultat vérifié
+## Verified result
 
-| Modèle/scénario | MAE | RMSE | R² |
+| Model / scenario | MAE | RMSE | R² |
 |---|---:|---:|---:|
-| CatBoost, holdout final groupé | **0,06080** | 0,08660 | 0,92083 |
-| CatBoost, GroupKFold développement | 0,06145 ± 0,00109 | 0,08646 | 0,92083 |
-| Comportement sans `killRank`, GroupKFold | 0,09266 | 0,12924 | 0,82314 |
-| Ridge linéaire, GroupKFold | 0,08831 | 0,12225 | 0,84177 |
-| Médiane constante, GroupKFold | 0,26788 | 0,30781 | -0,00294 |
+| CatBoost, final grouped holdout | **0.06080** | 0.08660 | 0.92083 |
+| CatBoost, development GroupKFold | 0.06145 ± 0.00109 | 0.08646 | 0.92083 |
+| Behaviour without `killRank`, GroupKFold | 0.09266 | 0.12924 | 0.82314 |
+| Linear Ridge, GroupKFold | 0.08831 | 0.12225 | 0.84177 |
+| Constant median, GroupKFold | 0.26788 | 0.30781 | -0.00294 |
 
-La comparaison initiale auditée emploie les paramètres d'apprentissage par
-défaut. CatBoost bat XGBoost de 0,00200 MAE en moyenne et dans les cinq folds.
-L'ancien gagnant XGBoost provenait de configurations initiales personnalisées ;
-leur rejeu ne lui donne qu'un avantage négligeable de 0,000054. Huit essais de
-tuning CatBoost n'améliorent pas le défaut et sont rejetés.
+The audited initial comparison uses library-default learning parameters. CatBoost
+outperforms XGBoost by 0.00200 MAE on average and in each of the five folds. The
+earlier XGBoost winner came from customized initial configurations; replaying
+them gives it only a negligible 0.000054 advantage. Eight CatBoost tuning trials
+did not improve on the default configuration and were rejected.
 
-## Points critiques
+## Key considerations
 
-- Une ligne décrit un joueur, mais la cible est le score de son équipe répété
-  sur les joueurs observés.
-- `killRank` est une information post-match. Son usage interdit de présenter le
-  modèle final comme une prédiction early-game.
-- Le split principal est un GroupKFold à 5 folds sur `gameId`, avec zéro ID brut
-  ou groupe conservateur partagé. Un holdout groupé de 9 872 lignes, gelé avant
-  la sélection du présent audit, fournit l'évaluation finale du cycle.
-- Une sensibilité à 3, 5, 7 et 10 folds confirme CatBoost dans les 25 folds.
-  Cinq folds est conservé : environ 8 026 validations par fold ; sept folds
-  coûte 52 % de plus pour seulement 0,000189 de MAE nominale.
-- La colonne `date`, officiellement date du match, est incohérente : 100 % des
-  `gameId` multi-lignes valides portent plusieurs dates. Le pseudo-temporel est
-  seulement un stress test purgé.
-- Près de 98,82 % des couples `(gameId, teamId)` sont singletons. Les agrégats
-  équipe/lobby ont été rejetés comme non défendables.
-- Le drift train/test est faible sur les variables mesurées : PSI numérique
-  maximal 0,00509, PSI catégoriel maximal 0,00844 et validation adversariale
-  ROC AUC 0,49325. Le drift de performance reste inconnu sans cible test.
+- Each row describes a player, while the target is the team's score repeated for
+  the observed players.
+- `killRank` is post-match information. Its use means that the final model must
+  not be presented as an early-game prediction.
+- The primary split is 5-fold GroupKFold on `gameId`, with no raw ID or
+  conservative group shared across partitions. A grouped holdout of 9,872 rows,
+  frozen before this audit's selection stage, provides the cycle's final
+  evaluation.
+- A sensitivity study over 3, 5, 7, and 10 folds confirms CatBoost in all 25
+  combined folds. Five folds are retained: about 8,026 validation rows per fold;
+  seven folds cost 52% more for only 0.000189 nominal MAE improvement.
+- The `date` column is officially the match date, yet 100% of valid multi-row
+  `gameId`s contain several dates. The pseudo-temporal split is therefore only a
+  purged stress test.
+- Nearly 98.82% of `(gameId, teamId)` pairs are singletons. Team- and
+  lobby-level aggregates were rejected as indefensible.
+- Train/test drift is low for measured variables: maximum numeric PSI is 0.00509,
+  maximum categorical PSI is 0.00844, and adversarial-validation ROC AUC is
+  0.49325. Performance drift remains unknown without test targets.
 
 ## Installation
 
-Python 3.11 à 3.14 et Poetry :
+Python 3.11 to 3.14 and Poetry are supported:
 
 ```bash
 poetry install --with dev
 ```
 
-Les CSV officiels ne sont pas versionnés. Les placer ici :
+The official CSV files are not versioned. Place them here:
 
 ```text
 data/raw/train.csv
 data/raw/test.csv
 ```
 
-## Reproduction
+## Reproducing the analysis
 
-Notebook complet :
+Execute the complete notebook:
 
 ```bash
 poetry run jupyter nbconvert \
@@ -72,61 +74,59 @@ poetry run jupyter nbconvert \
   --ExecutePreprocessor.timeout=1800
 ```
 
-Pipeline en ligne de commande :
+Run the command-line pipeline:
 
 ```bash
 poetry run python scripts/run_analysis.py
 ```
 
-## Interface Streamlit privée
+## Private Streamlit interface
 
-L'interface propose une lecture accessible de l'analyse, l'import de CSV
-privés, l'exploration, les diagnostics de validation et SHAP, un réglage
-CatBoost borné ainsi que l'export de prédictions. Les fichiers téléversés ne
-sont jamais écrits par l'application : ils restent en mémoire dans la session
-Streamlit.
+The interface offers an accessible overview of the analysis, private CSV upload,
+exploration, validation and SHAP diagnostics, bounded CatBoost tuning, and
+prediction export. Uploaded files are never written by the app: they stay in the
+Streamlit session memory.
 
 ```bash
 poetry run streamlit run app/app.py
 ```
 
-Téléversez un train officiel séparé par `;` contenant `winRankPercentage`, puis
-facultativement un test de même schéma sans cible. Le modèle est explicitement
-post-match : `killRank` est requis et ne doit pas être présenté comme un signal
-early-game.
+Upload a semicolon-separated official train file containing
+`winRankPercentage`, then optionally a same-schema test file without the target.
+The model is explicitly post-match: `killRank` is required and must not be
+presented as an early-game signal.
 
-Une variante CatBoost évaluée est comparée au modèle de référence sur le même
-holdout groupé. Elle ne devient le modèle actif de la session que si sa MAE est
-strictement plus faible ; les prédictions suivantes utilisent alors cette
-variante. Cette adoption ne modifie pas le dépôt ni le modèle publié : cela
-évite qu'un visiteur d'une application publique puisse écraser une version
-reproductible du modèle.
+An evaluated CatBoost variant is compared with the reference model on the same
+grouped holdout. It becomes the active session model only when its MAE is
+strictly lower; subsequent predictions then use that variant. This adoption does
+not modify the repository or published model, preventing a public-app visitor
+from overwriting a reproducible version.
 
-## CI/CD et déploiement Streamlit
+## CI/CD and Streamlit deployment
 
-Le contrôle continu est défini dans
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) : à chaque pull request
-vers `main` et après chaque push sur `main`, GitHub Actions exécute les tests,
-Black et Flake8 avec Python 3.12.
+Continuous integration is defined in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml): every pull request to
+`main` and every push to `main` run tests, Black, and Flake8 with Python 3.12 in
+GitHub Actions.
 
-Le déploiement continu est géré nativement par Streamlit Community Cloud une
-fois l'application reliée au dépôt : les nouveaux commits de la branche suivie
-sont pris en compte automatiquement. La configuration visuelle et la limite
-d'import sont versionnées dans [`.streamlit/config.toml`](.streamlit/config.toml).
+Continuous deployment is handled natively by Streamlit Community Cloud once the
+app is linked to the repository: new commits to the tracked branch are deployed
+automatically. Theme and upload-limit configuration are versioned in
+[`.streamlit/config.toml`](.streamlit/config.toml).
 
-Pour créer l'application une seule fois dans Streamlit Community Cloud :
+To create the app once in Streamlit Community Cloud:
 
-1. Dans votre espace Streamlit, cliquez sur **Create app**.
-2. Choisissez `Manda404/Game-Player-Analysis`, la branche `main` et le point
-   d'entrée `app/app.py`.
-3. Conservez Python 3.12, puis cliquez sur **Deploy**.
+1. In your Streamlit workspace, click **Create app**.
+2. Choose `Manda404/Game-Player-Analysis`, branch `main`, and entry point
+   `app/app.py`.
+3. Keep Python 3.12 and click **Deploy**.
 
-L'application ne nécessite aucun secret. Les CSV des visiteurs restent en
-mémoire ; ils ne sont donc ni présents dans GitHub ni envoyés vers une API.
-Consultez la [documentation officielle de déploiement Streamlit](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy)
-si vous souhaitez choisir une URL personnalisée.
+The application requires no secrets. Visitor CSV files remain in memory, so they
+are neither committed to GitHub nor sent to an external API. Consult the
+[official Streamlit deployment documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy)
+if you want to select a custom URL.
 
-Inférence depuis un nouveau CSV officiel :
+Run inference from a new official CSV:
 
 ```bash
 poetry run python scripts/predict_from_csv.py data/raw/test.csv \
@@ -134,7 +134,7 @@ poetry run python scripts/predict_from_csv.py data/raw/test.csv \
   --output-path data/output/submission.csv
 ```
 
-Qualité :
+Quality checks:
 
 ```bash
 poetry run pytest
@@ -146,29 +146,28 @@ poetry run flake8 app src tests scripts
 
 ```text
 src/game_player_analysis/
-├── data.py             lecture, schéma et empreintes
-├── cleaning.py         sentinelles métier
-├── analysis.py         qualité, KPI et profils
-├── features.py         contrat unique de 15/16 features
-├── validation.py       folds, holdouts et audits de fuite
-├── modeling.py         baselines, ensembles, tuning et bundle
-├── evaluation.py       métriques, sous-groupes et importance
-├── inference.py        CSV brut → soumission validée
-├── visualization.py    figures décisionnelles, dont drift et validation
-└── pipeline.py         orchestration reproductible
+├── data.py             reading, schema, and fingerprints
+├── cleaning.py         business sentinels
+├── analysis.py         quality, KPIs, and profiles
+├── features.py         single 15/16-feature contract
+├── validation.py       folds, holdouts, and leakage audits
+├── modeling.py         baselines, ensembles, tuning, and bundle
+├── evaluation.py       metrics, subgroups, and importance
+├── inference.py        raw CSV → validated submission
+├── visualization.py    decision-oriented figures, including drift and validation
+└── pipeline.py         reproducible orchestration
 ```
 
-## Sorties
+## Outputs
 
-- modèle et contrat : `artifacts/model.joblib`, `model_manifest.json` ;
-- métriques détaillées : `artifacts/metrics/` ;
-- figures : `artifacts/figures/` ;
-- décision de tuning : `artifacts/metadata/tuning_decision.json` ;
-- décision finale : `artifacts/metadata/final_selection_decision.json` ;
-- journal CLI : `artifacts/logs/analysis.log` ;
-- prédictions : `data/output/submission.csv`.
+- model and contract: `artifacts/model.joblib`, `model_manifest.json`;
+- detailed metrics: `artifacts/metrics/`;
+- figures: `artifacts/figures/`;
+- tuning decision: `artifacts/metadata/tuning_decision.json`;
+- final decision: `artifacts/metadata/final_selection_decision.json`;
+- CLI log: `artifacts/logs/analysis.log`;
+- predictions: `data/output/submission.csv`.
 
-Le [rapport final](docs/final_report.md) synthétise les conclusions. Les audits
-de départ et la matrice de couverture sont sous [`docs/review/`](docs/review/).
-L'état pré-refactoring reste récupérable dans
-`dist/pre_refactor_2026-08-02.zip`.
+The [final report](docs/final_report.md) summarizes the conclusions. Initial
+audits and the coverage matrix are in [`docs/review/`](docs/review/). The
+pre-refactoring state remains available in `dist/pre_refactor_2026-08-02.zip`.

@@ -1,7 +1,7 @@
 {
   "artifact_version": 2,
   "benchmark": "model_comparison.csv",
-  "created_at_utc": "2026-08-02T20:13:02.216726+00:00",
+  "created_at_utc": "2026-08-03T08:04:27.310200+00:00",
   "feature_count": 16,
   "features": [
     "killRank",
@@ -34,7 +34,7 @@
     "random_seed": 42,
     "verbose": false
   },
-  "model_sha256": "e981818d966b78244a57cd3b7b4e7aab480e8a5dab4808314034f9519b9ae099",
+  "model_sha256": "3738da6872623bbce562bc375f2dbb52008cd35889314fc91035225af7eb2369",
   "postprocessing": "clip_[0,1]_and_snap_to_maxRank_grid",
   "primary_metric": "MAE",
   "random_state": 42,

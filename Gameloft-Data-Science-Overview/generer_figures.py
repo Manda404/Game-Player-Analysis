@@ -8,6 +8,7 @@ distribution from the immutable training CSV.
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,6 +16,11 @@ import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from game_player_analysis.visualization import apply_style  # noqa: E402
+
 METRICS_DIR = PROJECT_ROOT / "artifacts" / "metrics"
 OUTPUT_DIR = Path(__file__).resolve().parent / "figures"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -79,14 +85,14 @@ def plot_data_audit() -> None:
     target_axis.text(
         target.mean() + 0.025,
         target_axis.get_ylim()[1] * 0.84,
-        f"moyenne = {target.mean():.3f}",
+        f"mean = {target.mean():.3f}",
         color=ORANGE,
         fontsize=7,
     )
     target_axis.set(
-        title="Cible bornée mais non uniforme",
-        xlabel="winRankPercentage (0 = dernier, 1 = premier)",
-        ylabel="Lignes joueur",
+        title="Bounded but non-uniform target",
+        xlabel="winRankPercentage (0 = last, 1 = first)",
+        ylabel="Player rows",
         xlim=(0, 1),
     )
 
@@ -101,22 +107,22 @@ def plot_data_audit() -> None:
         date_values[:, 0],
         width,
         color=BLUE,
-        label="médiane",
+        label="median",
     )
     date_axis.bar(
         positions + width / 2,
         date_values[:, 1],
         width,
         color=LIGHT_BLUE,
-        label="95e pct.",
+        label="95th pct.",
     )
     date_axis.set_xticks(positions, ["Train", "Test"])
-    date_axis.set(title="Dates incohérentes", ylabel="Étendue intra-gameId (jours)")
+    date_axis.set(title="Inconsistent dates", ylabel="Within-gameId span (days)")
     date_axis.legend(frameon=False, fontsize=6.2, loc="center right")
     date_axis.text(
         0.02,
         0.97,
-        "100 % des matchs\nmulti-lignes",
+        "100% of multi-row\nmatches",
         transform=date_axis.transAxes,
         va="top",
         fontsize=5.9,
@@ -127,14 +133,14 @@ def plot_data_audit() -> None:
         coverage.loc["train", "singleton_team_pct"],
         coverage.loc["train", "rows_with_observed_teammate_pct"],
     ]
-    labels = ["Groupes\nsingletons", "Lignes avec\ncoéquipier"]
+    labels = ["Singleton\ngroups", "Rows with an\nobserved teammate"]
     bars = coverage_axis.bar(
         labels,
         coverage_values,
         color=[ORANGE, GREEN],
         width=0.62,
     )
-    coverage_axis.set(title="Équipes peu observées", ylabel="Lignes / groupes (%)", ylim=(0, 108))
+    coverage_axis.set(title="Sparse team observations", ylabel="Rows / groups (%)", ylim=(0, 108))
     for bar, value in zip(bars, coverage_values, strict=True):
         coverage_axis.text(
             bar.get_x() + bar.get_width() / 2,
@@ -144,14 +150,14 @@ def plot_data_audit() -> None:
             fontsize=6.7,
         )
 
-    figure.suptitle("Audit des données : ce qui a changé les décisions", fontsize=9.2, y=0.995)
+    figure.suptitle("Data audit: what changed my decisions", fontsize=9.2, y=0.995)
     save_figure(figure, "01_data_audit.png")
 
 
 def plot_feature_ablation() -> None:
     """Show the incremental value of each published feature family."""
     ablation = read_metric("feature_ablation")
-    labels = ["Contexte", "+ mobilité", "+ combat", "+ ressources", "+ killRank"]
+    labels = ["Context", "+ mobility", "+ combat", "+ resources", "+ killRank"]
     values = ablation["mae"].to_numpy()
 
     figure, axis = plt.subplots(figsize=(4.0, 2.35))
@@ -176,12 +182,50 @@ def plot_feature_ablation() -> None:
         )
     axis.set_xticks(np.arange(len(labels)), labels, rotation=17, ha="right")
     axis.set(
-        title="Ablation groupée : contribution des familles de variables",
+        title="Grouped ablation: contribution of feature families",
         ylabel="MAE GroupKFold",
         ylim=(0.05, 0.305),
     )
     axis.axvspan(3.62, 4.18, color=ORANGE, alpha=0.12)
     save_figure(figure, "02_feature_ablation.png")
+
+
+def plot_eda_profiles() -> None:
+    """Render English target profiles from the published exploratory metrics."""
+    apply_style()
+    profiles = read_metric("feature_profiles")
+    features = ("walkDist", "kills", "upgrades", "killRank")
+    labels = {
+        "walkDist": "Walking distance",
+        "kills": "Kills",
+        "upgrades": "Upgrades",
+        "killRank": "Kill ranking",
+    }
+    figure, axes = plt.subplots(2, 2, figsize=(4.0, 2.8))
+    for axis, feature in zip(axes.ravel(), features, strict=True):
+        subset = profiles.loc[profiles["feature"].eq(feature)]
+        axis.errorbar(
+            subset["x_median"],
+            subset["target_mean"],
+            yerr=subset["ci95"],
+            marker="o",
+            markersize=2.4,
+            linewidth=1.0,
+            capsize=1.5,
+            color=BLUE,
+        )
+        axis.set(
+            title=f"Target by {labels[feature]}",
+            xlabel=labels[feature],
+            ylabel="Mean target",
+            ylim=(0, 1),
+        )
+        axis.tick_params(labelsize=5.2, pad=1)
+        axis.title.set_fontsize(6.0)
+        axis.xaxis.label.set_fontsize(5.5)
+        axis.yaxis.label.set_fontsize(5.5)
+    figure.tight_layout(pad=0.45, w_pad=0.4, h_pad=0.65)
+    save_figure(figure, "06_eda_profiles.png")
 
 
 def plot_validation_protocol() -> None:
@@ -195,10 +239,10 @@ def plot_validation_protocol() -> None:
         "Purged Jan-Mar → Apr",
     ]
     labels = [
-        "Aléatoire ligne",
-        "Groupé gameId",
-        "Pseudo-temp. naïf",
-        "Pseudo-temp. purgé",
+        "Random row",
+        "Grouped gameId",
+        "Naive pseudo-temporal",
+        "Purged pseudo-temporal",
     ]
     colors = [RED, GREEN, RED, GREEN]
 
@@ -214,7 +258,7 @@ def plot_validation_protocol() -> None:
     bars = axes[0].barh(positions, seen, color=colors, height=0.60)
     axes[0].set_yticks(positions, labels)
     axes[0].invert_yaxis()
-    axes[0].set(title="Matchs déjà vus", xlabel="Lignes de validation (%)", xlim=(0, 67))
+    axes[0].set(title="Matches already seen", xlabel="Validation rows (%)", xlim=(0, 67))
     for bar, value in zip(bars, seen, strict=True):
         axes[0].text(
             value + 1.4,
@@ -228,7 +272,7 @@ def plot_validation_protocol() -> None:
     mae = performance.loc[order, "mae"].to_numpy()
     axes[1].scatter(mae, positions, c=colors, s=32, zorder=3)
     axes[1].set(
-        title="Score du même CatBoost",
+        title="Same CatBoost score",
         xlabel="MAE holdout",
         xlim=(0.06084, 0.06138),
     )
@@ -244,7 +288,7 @@ def plot_validation_protocol() -> None:
         )
 
     figure.suptitle(
-        "Validation : supprimer la fuite avant d'interpréter le score", fontsize=9.0, y=1.01
+        "Validation: remove leakage before interpreting the score", fontsize=9.0, y=1.01
     )
     save_figure(figure, "03_validation_protocol.png")
 
@@ -257,10 +301,10 @@ def plot_interpretation_and_errors() -> None:
 
     importance_labels = {
         "killRank": "killRank",
-        "walk_distance_per_match_minute": "Marche / minute",
+        "walk_distance_per_match_minute": "Walking distance / minute",
         "kills": "Kills",
         "maxRank": "maxRank",
-        "walkDist": "Distance à pied",
+        "walkDist": "Walking distance",
     }
     importance["label"] = importance["feature"].map(importance_labels)
     importance = importance.sort_values("mae_increase_mean")
@@ -281,8 +325,8 @@ def plot_interpretation_and_errors() -> None:
         alpha=0.95,
     )
     axes[0].set(
-        title="Importance par permutation sur holdout groupé",
-        xlabel="Hausse de MAE après permutation",
+        title="Permutation importance on grouped holdout",
+        xlabel="MAE increase after permutation",
     )
 
     bars = axes[1].bar(
@@ -292,9 +336,9 @@ def plot_interpretation_and_errors() -> None:
         width=0.65,
     )
     axes[1].set(
-        title="Erreur out-of-fold par famille de mode",
+        title="Out-of-fold error by mode family",
         ylabel="MAE",
-        xlabel="Famille de gameType",
+        xlabel="gameType family",
         ylim=(0, 0.116),
     )
     for bar, mae, rows in zip(bars, modes["mae"], modes["rows"], strict=True):
@@ -306,7 +350,7 @@ def plot_interpretation_and_errors() -> None:
             fontsize=6.3,
         )
 
-    figure.suptitle("Ce que le modèle utilise — et où il échoue", fontsize=9.2, y=0.995)
+    figure.suptitle("What the model uses — and where it fails", fontsize=9.2, y=0.995)
     save_figure(figure, "04_interpretation_errors.png")
 
 
@@ -322,7 +366,7 @@ def plot_drift_diagnostics() -> None:
     axes[0].barh(numeric_plot["feature"], numeric_plot["psi"], color=BLUE)
     axes[0].axvline(0.1, color=RED, linewidth=1.0, linestyle="--")
     axes[0].set(
-        title="PSI numérique maximal = 0,0051",
+        title="Maximum numeric PSI = 0.0051",
         xlabel="Population Stability Index",
         xlim=(0, 0.105),
     )
@@ -331,12 +375,12 @@ def plot_drift_diagnostics() -> None:
     axes[1].barh(category_plot["feature"], category_plot["psi"], color=ORANGE)
     axes[1].axvline(0.1, color=RED, linewidth=1.0, linestyle="--")
     axes[1].set(
-        title=f"Catégories faibles ; AUC adv. = {auc:.3f}",
+        title=f"Low categorical drift; adversarial AUC = {auc:.3f}",
         xlabel="Population Stability Index",
         xlim=(0, 0.105),
     )
     figure.suptitle(
-        "Drift train/test : aucune dérive matérielle détectée",
+        "Train/test drift: no material shift detected",
         fontsize=9.0,
         y=1.01,
     )
@@ -347,6 +391,7 @@ def main() -> None:
     """Render every figure referenced by the LaTeX report."""
     plot_data_audit()
     plot_feature_ablation()
+    plot_eda_profiles()
     plot_validation_protocol()
     plot_interpretation_and_errors()
     plot_drift_diagnostics()

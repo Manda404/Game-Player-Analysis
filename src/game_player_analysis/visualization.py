@@ -20,7 +20,7 @@ def plot_target_distribution(train: pd.DataFrame, ax: Axes | None = None) -> Axe
     """Plot the bounded target distribution."""
     axis = ax or plt.subplots(figsize=(9, 4.5))[1]
     sns.histplot(train[TARGET], bins=50, color="#2878B5", ax=axis)
-    axis.set(title="Distribution de la cible", xlabel=TARGET, ylabel="Joueurs")
+    axis.set(title="Target distribution", xlabel=TARGET, ylabel="Players")
     return axis
 
 
@@ -32,7 +32,7 @@ def plot_top_correlations(train: pd.DataFrame, ax: Axes | None = None) -> Axes:
     )
     axis = ax or plt.subplots(figsize=(9, 5))[1]
     correlations.plot.barh(color="#2878B5", ax=axis)
-    axis.set(title="Principales corrélations de Spearman", xlabel="Corrélation")
+    axis.set(title="Top Spearman correlations", xlabel="Correlation")
     return axis
 
 
@@ -41,7 +41,7 @@ def plot_model_comparison(results: pd.DataFrame, ax: Axes | None = None) -> Axes
     axis = ax or plt.subplots(figsize=(9, 4.5))[1]
     ordered = results.sort_values("mae", ascending=False)
     sns.barplot(data=ordered, x="mae", y="model", color="#2878B5", ax=axis)
-    axis.set(title="Comparaison GroupKFold", xlabel="MAE (plus faible = mieux)", ylabel="")
+    axis.set(title="GroupKFold comparison", xlabel="MAE (lower is better)", ylabel="")
     return axis
 
 
@@ -55,9 +55,9 @@ def plot_predictions(
     axis.scatter(target, prediction, alpha=0.12, s=9, color="#2878B5")
     axis.plot([0, 1], [0, 1], "--", color="#D9534F")
     axis.set(
-        title="Prédictions out-of-fold",
-        xlabel="Cible observée",
-        ylabel="Prédiction",
+        title="Out-of-fold predictions",
+        xlabel="Observed target",
+        ylabel="Prediction",
         xlim=(0, 1),
         ylim=(0, 1),
     )
@@ -85,9 +85,9 @@ def plot_date_contradiction(
         ax=axes[0],
     )
     axes[0].set(
-        title="Périodes officielles des fichiers",
-        xlabel="Mois attribué",
-        ylabel="Lignes joueur",
+        title="Official file periods",
+        xlabel="Assigned month",
+        ylabel="Player rows",
     )
 
     span_rows = []
@@ -109,9 +109,9 @@ def plot_date_contradiction(
         ax=axes[1],
     )
     axes[1].set(
-        title="Même gameId réparti sur plusieurs dates",
-        xlabel="Étendue intra-gameId (jours)",
-        ylabel="Densité",
+        title="One gameId assigned to multiple dates",
+        xlabel="Within-gameId span (days)",
+        ylabel="Density",
     )
     figure.tight_layout()
     return axes
@@ -139,14 +139,14 @@ def plot_quality_overview(
         ax=axes[0],
     )
     axes[0].set(
-        title="Sentinelles et anomalies",
-        xlabel="Lignes concernées (%)",
+        title="Sentinels and anomalies",
+        xlabel="Affected rows (%)",
         ylabel="",
     )
     profile.sort_values("zero_pct")["zero_pct"].plot.barh(color="#2878B5", ax=axes[1])
     axes[1].set(
-        title="Concentration des zéros",
-        xlabel="Valeurs nulles (%)",
+        title="Zero concentration",
+        xlabel="Zero values (%)",
         ylabel="",
     )
     figure.tight_layout()
@@ -162,9 +162,9 @@ def plot_sampling_structure(train: pd.DataFrame) -> np.ndarray:
     sns.histplot(rows_per_game, discrete=True, ax=axes[0], color="#2878B5")
     sns.histplot(teams_per_game, discrete=True, ax=axes[1], color="#3A923A")
     sns.histplot(rows_per_team, discrete=True, ax=axes[2], color="#D9822B")
-    axes[0].set(title="Joueurs observés par gameId", xlabel="Lignes", ylabel="Matchs")
-    axes[1].set(title="Équipes observées par gameId", xlabel="Équipes", ylabel="Matchs")
-    axes[2].set(title="Joueurs observés par équipe", xlabel="Lignes", ylabel="Équipes")
+    axes[0].set(title="Observed players per gameId", xlabel="Rows", ylabel="Matches")
+    axes[1].set(title="Observed teams per gameId", xlabel="Teams", ylabel="Matches")
+    axes[2].set(title="Observed players per team", xlabel="Rows", ylabel="Teams")
     for axis in axes:
         axis.set_yscale("log")
     figure.tight_layout()
@@ -192,9 +192,9 @@ def plot_feature_target_profiles(
             capsize=3,
         )
         axis.set(
-            title=f"Cible par quantile de {feature}",
-            xlabel=f"{feature} (médiane du quantile)",
-            ylabel=f"Moyenne {TARGET}",
+            title=f"Target by {feature} quantile",
+            xlabel=f"{feature} (quantile median)",
+            ylabel=f"Mean {TARGET}",
             ylim=(0, 1),
         )
     for axis in flattened[len(features) :]:
@@ -223,7 +223,7 @@ def plot_targeted_correlation_heatmap(
         linewidths=0.5,
         ax=axis,
     )
-    axis.set_title("Corrélations de Spearman ciblées")
+    axis.set_title("Focused Spearman correlations")
     return axis
 
 
@@ -235,13 +235,13 @@ def plot_validation_comparison(
     combined = audit.join(performance[["mae"]], how="inner")
     figure, axes = plt.subplots(1, 2, figsize=(14, 4.5))
     combined["mae"].sort_values(ascending=False).plot.barh(color="#2878B5", ax=axes[0])
-    axes[0].set(title="MAE du modèle de référence", xlabel="MAE", ylabel="")
+    axes[0].set(title="Reference-model MAE", xlabel="MAE", ylabel="")
     combined["validation_rows_from_seen_games_pct"].sort_values().plot.barh(
         color="#D9534F", ax=axes[1]
     )
     axes[1].set(
-        title="Lignes de validation issues de gameId vus",
-        xlabel="Lignes (%)",
+        title="Validation rows from seen gameIds",
+        xlabel="Rows (%)",
         ylabel="",
         xlim=(0, 100),
     )
@@ -258,31 +258,31 @@ def plot_drift_diagnostics(
     figure, axes = plt.subplots(2, 2, figsize=(14, 9))
 
     numeric_shift.nlargest(10, "psi")["psi"].sort_values().plot.barh(color="#2878B5", ax=axes[0, 0])
-    axes[0, 0].axvline(0.1, linestyle="--", color="#D9534F", label="repère PSI 0,1")
-    axes[0, 0].set(title="PSI des features finales", xlabel="PSI", ylabel="")
+    axes[0, 0].axvline(0.1, linestyle="--", color="#D9534F", label="PSI guide 0.1")
+    axes[0, 0].set(title="PSI for final features", xlabel="PSI", ylabel="")
     axes[0, 0].legend()
 
     numeric_shift.nlargest(10, "ks_statistic")["ks_statistic"].sort_values().plot.barh(
         color="#55A868", ax=axes[0, 1]
     )
-    axes[0, 1].set(title="Distance KS train/test", xlabel="Statistique KS", ylabel="")
+    axes[0, 1].set(title="Train/test KS distance", xlabel="KS statistic", ylabel="")
 
     categorical_shift["total_variation_distance"].sort_values().plot.barh(
         color="#D9822B", ax=axes[1, 0]
     )
     axes[1, 0].set(
-        title="Drift des catégories",
-        xlabel="Distance de variation totale",
+        title="Categorical drift",
+        xlabel="Total variation distance",
         ylabel="",
     )
 
     auc = float(adversarial_validation["roc_auc_mean"])
     auc_std = float(adversarial_validation["roc_auc_std"])
-    axes[1, 1].barh(["Classifieur train/test"], [auc], xerr=[auc_std], color="#8172B2")
-    axes[1, 1].axvline(0.5, linestyle="--", color="black", label="hasard")
+    axes[1, 1].barh(["Train/test classifier"], [auc], xerr=[auc_std], color="#8172B2")
+    axes[1, 1].axvline(0.5, linestyle="--", color="black", label="chance")
     axes[1, 1].set(
-        title="Séparabilité multivariée",
-        xlabel="ROC AUC out-of-fold",
+        title="Multivariate separability",
+        xlabel="Out-of-fold ROC AUC",
         ylabel="",
         xlim=(0.45, max(0.65, auc + 0.05)),
     )
@@ -312,8 +312,8 @@ def plot_feature_ablation(ablation: pd.DataFrame, ax: Axes | None = None) -> Axe
             fontsize=8,
         )
     axis.set(
-        title="Ablation progressive des familles de features",
-        xlabel="Étape",
+        title="Progressive feature-family ablation",
+        xlabel="Stage",
         ylabel="MAE GroupKFold",
     )
     axis.tick_params(axis="x", rotation=20)
@@ -328,7 +328,7 @@ def plot_model_diagnostics(
     figure, axes = plt.subplots(1, 3, figsize=(18, 5))
     ordered = results.sort_values("mae", ascending=False)
     sns.barplot(data=ordered, x="mae", y="model", color="#2878B5", ax=axes[0])
-    axes[0].set(title="MAE moyenne", xlabel="MAE", ylabel="")
+    axes[0].set(title="Mean MAE", xlabel="MAE", ylabel="")
 
     fold_rows = []
     for model, detail in fold_details.items():
@@ -341,7 +341,7 @@ def plot_model_diagnostics(
         hue="model",
         ax=axes[1],
     )
-    axes[1].set(title="Stabilité entre folds", xlabel="Fold", ylabel="MAE")
+    axes[1].set(title="Fold stability", xlabel="Fold", ylabel="MAE")
     axes[1].legend(fontsize=7)
 
     gap = results.assign(mae_gap=results["mae"] - results["train_mae"])
@@ -353,8 +353,8 @@ def plot_model_diagnostics(
         ax=axes[2],
     )
     axes[2].set(
-        title="Écart validation − train",
-        xlabel="Écart MAE",
+        title="Validation − train gap",
+        xlabel="MAE gap",
         ylabel="",
     )
     figure.tight_layout()
@@ -372,8 +372,8 @@ def plot_tuning_results(
     axis.plot(ordered["trial"], ordered["mae"], marker="o", color="#2878B5")
     axis.axhline(baseline_mae, linestyle="--", color="#D9534F", label="baseline")
     axis.set(
-        title="Hyperparameter tuning borné",
-        xlabel="Essai",
+        title="Bounded hyperparameter tuning",
+        xlabel="Trial",
         ylabel="MAE GroupKFold",
         xticks=ordered["trial"],
     )
@@ -393,14 +393,14 @@ def plot_error_diagnostics(
     figure, axes = plt.subplots(2, 2, figsize=(14, 10))
     sns.histplot(residual, bins=60, kde=True, color="#2878B5", ax=axes[0, 0])
     axes[0, 0].axvline(0, linestyle="--", color="#D9534F")
-    axes[0, 0].set(title="Distribution des résidus", xlabel="Prédiction − cible")
+    axes[0, 0].set(title="Residual distribution", xlabel="Prediction − target")
 
     axes[0, 1].hexbin(frame[TARGET], values, gridsize=35, cmap="Blues", mincnt=1)
     axes[0, 1].plot([0, 1], [0, 1], "--", color="#D9534F")
     axes[0, 1].set(
-        title="Prédiction contre cible",
-        xlabel="Cible",
-        ylabel="Prédiction",
+        title="Prediction versus target",
+        xlabel="Target",
+        ylabel="Prediction",
         xlim=(0, 1),
         ylim=(0, 1),
     )
@@ -418,8 +418,8 @@ def plot_error_diagnostics(
         color="#2878B5",
     )
     axes[1, 0].set(
-        title="Erreur selon le niveau de cible",
-        xlabel="Cible moyenne du décile",
+        title="Error by target level",
+        xlabel="Mean target in decile",
         ylabel="MAE",
     )
 
@@ -427,7 +427,7 @@ def plot_error_diagnostics(
         "mae", ascending=False
     )
     sns.barplot(data=modes, x="mae", y="subgroup", color="#D9822B", ax=axes[1, 1])
-    axes[1, 1].set(title="Erreur par famille de mode", xlabel="MAE", ylabel="")
+    axes[1, 1].set(title="Error by mode family", xlabel="MAE", ylabel="")
     figure.tight_layout()
     return axes
 
@@ -449,8 +449,8 @@ def plot_permutation_importance(
         alpha=0.9,
     )
     axis.set(
-        title="Importance par permutation sur holdout groupé",
-        xlabel="Augmentation de MAE après permutation",
+        title="Permutation importance on grouped holdout",
+        xlabel="MAE increase after permutation",
         ylabel="",
     )
     return axis
@@ -477,15 +477,15 @@ def plot_fold_count_study(
         )
     axes[0].axvline(5, color="#555555", linestyle="--", linewidth=1)
     axes[0].annotate(
-        "choix : 5 folds",
+        "selected: 5 folds",
         xy=(5, sensitivity["mae"].min()),
         xytext=(5.35, sensitivity["mae"].min() + 0.00045),
         color="#555555",
     )
     axes[0].set(
-        title="Stabilité des modèles selon K",
-        xlabel="Nombre de folds GroupKFold",
-        ylabel="MAE moyenne ± écart-type entre folds",
+        title="Model stability by K",
+        xlabel="Number of GroupKFold folds",
+        ylabel="Mean MAE ± fold standard deviation",
         xticks=sorted(sensitivity["n_splits"].unique()),
     )
     axes[0].legend(frameon=False)
@@ -500,9 +500,9 @@ def plot_fold_count_study(
         bars, labels=[f"{value:.2f}×" for value in ordered_decision["fit_cost_relative_to_5_folds"]]
     )
     axes[1].set(
-        title="Coût relatif du protocole",
-        xlabel="Nombre de folds GroupKFold",
-        ylabel="Temps d'entraînement relatif à 5 folds",
+        title="Relative protocol cost",
+        xlabel="Number of GroupKFold folds",
+        ylabel="Training time relative to 5 folds",
     )
     secondary = axes[1].twinx()
     secondary.plot(
@@ -512,7 +512,7 @@ def plot_fold_count_study(
         marker="o",
         linewidth=1.5,
     )
-    secondary.set_ylabel("Lignes de validation par fold", color="#555555")
+    secondary.set_ylabel("Validation rows per fold", color="#555555")
     secondary.tick_params(axis="y", colors="#555555")
     figure.tight_layout()
     return axes
@@ -532,8 +532,8 @@ def plot_shap_summary(
     ordered = selected.sort_values("mean_abs_shap")
     axes[0].barh(ordered["feature"], ordered["mean_abs_shap"], color="#2878B5", alpha=0.9)
     axes[0].set(
-        title="Importance globale SHAP",
-        xlabel="Moyenne de |valeur SHAP|",
+        title="Global SHAP importance",
+        xlabel="Mean |SHAP value|",
         ylabel="",
     )
 
@@ -564,15 +564,15 @@ def plot_shap_summary(
         )
     axes[1].axvline(0, color="#555555", linewidth=0.8)
     axes[1].set(
-        title="Contributions locales sur le holdout",
-        xlabel="Valeur SHAP : contribution au classement prédit",
+        title="Local contributions on the holdout",
+        xlabel="SHAP value: contribution to predicted ranking",
         ylabel="",
         yticks=np.arange(len(features)),
         yticklabels=list(reversed(features)),
     )
     if color_artist is not None:
         colorbar = figure.colorbar(color_artist, ax=axes[1], pad=0.02)
-        colorbar.set_label("Valeur de la variable")
-        colorbar.set_ticks([0.0, 1.0], labels=["faible", "élevée"])
+        colorbar.set_label("Feature value")
+        colorbar.set_ticks([0.0, 1.0], labels=["low", "high"])
     figure.tight_layout()
     return axes

@@ -2,7 +2,7 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[french]{babel}
+\usepackage[english]{babel}
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -16,16 +16,10 @@
 \graphicspath{{figures/}{../artifacts/figures/}}
 \definecolor{accent}{HTML}{2878B5}
 \definecolor{accentdark}{HTML}{174F73}
-\definecolor{accentpale}{HTML}{EAF3F8}
 \definecolor{muted}{HTML}{555555}
 \newcommand{\code}[1]{\texttt{\small #1}}
 \newcommand{\contactsep}{\hspace{0.4em}{\color{muted}\textbar}\hspace{0.4em}}
 \newcommand{\decision}[1]{\textbf{\color{accent}#1}}
-\newcommand{\metric}[2]{%
-  \begin{tabular}[t]{@{}c@{}}%
-    {\normalfont\color{accent}\bfseries\large #1}\\[-0.35em]
-    {\normalfont\scriptsize\color{muted} #2}%
-  \end{tabular}}
 \renewcommand{\arraystretch}{0.94}
 \setlength{\textfloatsep}{6pt plus 1pt minus 2pt}
 \setlength{\floatsep}{5pt plus 1pt minus 2pt}
@@ -39,8 +33,8 @@
 \titlespacing*{\section}{0pt}{1.1ex plus 0.3ex}{0.5ex}
 \titlespacing*{\subsection}{0pt}{0.8ex plus 0.2ex}{0.3ex}
 
-\title{\textit{Prédiction du classement final d'un joueur}\\
-\large à partir de ses statistiques de jeu}
+\title{\textit{Predicting a Player's Final Ranking}\\
+\large from Game Statistics}
 
 \author{
 \IEEEauthorblockN{\textbf{Rostand Surel}}
@@ -57,382 +51,263 @@
 \maketitle
 
 \begin{abstract}
-Dans ce rapport, je présente la chaîne complète d'analyse et de prédiction que
-j'ai construite pour estimer le classement normalisé de l'équipe associé à un
-joueur à partir de ses statistiques dans une partie de Battle Royale. J'ai
-commencé par clarifier les codes utilisés pour signaler une information
-indisponible, la structure incomplète des matchs et la disponibilité réelle des
-variables. J'ai ensuite créé des variables métier, puis retenu 16 variables en
-gardant toujours les joueurs d'une même partie dans le même groupe de
-validation. J'ai comparé cinq familles de modèles dans les mêmes conditions.
-CatBoost obtient la plus faible erreur absolue moyenne (MAE): 0,06145, contre
-0,26788 pour le modèle de référence qui prédit toujours la médiane globale. La
-projection des prédictions sur les rangs réellement possibles dans chaque match
-ramène la MAE out-of-fold à 0,06098. Le modèle gelé obtient ensuite 0,06080 de
-MAE sur le holdout groupé. Enfin, je réutilise le modèle sauvegardé, sans le
-réentraîner, pour produire les 5,000 prédictions du fichier de soumission.
+In this report, I present the complete analysis and prediction pipeline that I
+built to estimate a player's team's normalized final ranking from Battle Royale
+post-match statistics. I first clarify missing-value codes, incomplete match
+structure, and actual feature availability. I then create business-oriented
+features, retain 16 variables, and keep every player from the same match in the
+same validation group. I compare five model families under identical
+conditions. CatBoost achieves the lowest mean absolute error (MAE), 0.06145,
+versus 0.26788 for the global-median baseline. Snapping predictions to rankings
+that are possible within each match gives 0.06098 out-of-fold MAE. The frozen
+model then achieves 0.06080 MAE on the grouped holdout. Finally, I reuse the
+saved model, without retraining, to generate the 5,000 submission predictions.
 \end{abstract}
 
 \begin{IEEEkeywords}
-régression tabulaire, Battle Royale, analyse exploratoire, construction de variables,
-validation groupée, CatBoost, fuite de données
+tabular regression, Battle Royale, exploratory analysis, feature engineering,
+grouped validation, CatBoost, data leakage
 \end{IEEEkeywords}
 
-\section{Vue d'ensemble du problème}
+\section{Problem and data}
 
-\textbf{La démarche part du problème métier.} Environ cent joueurs participent
-à une partie, mais chaque ligne ne décrit qu'un joueur après le match.
-\code{gameId} identifie la partie et \code{teamId} son équipe, tandis que les
-modes solo, duo, squad et spéciaux modifient la taille des groupes et le
-contexte des actions. La cible \code{winRankPercentage} vaut 1 pour la première
-place et 0 pour la dernière; elle dépend de \code{maxRank}, et non de
-\code{numTeams}.
+\textbf{I start from the business problem.} Around one hundred players take
+part in a match, but each row describes only one player after the match.
+\code{gameId} identifies the match and \code{teamId} its team; solo, duo,
+squad, and special modes change action context and group size. The target
+\code{winRankPercentage} is 1 for first place and 0 for last place. It depends
+on \code{maxRank}, not on \code{numTeams}.
 
-Les 30 colonnes du train décrivent sept familles: combat (dégâts, kills,
-assists, knocks), mobilité (marche, véhicule, nage), ressources et survie
-(armes, soins, améliorations), contexte du match, rankings externes,
-identifiants et cible. Ainsi, le train comporte 50,000 lignes, 30,983
-\code{gameId} et 16 modes, alors que le test, sans cible, contient 5,000 lignes,
-4,431 matchs et 10 modes. Enfin, le sujet attribue le train à janvier--avril
-2024 et le test à mai 2024.
+The 30 train columns cover combat, mobility, resources and survival, match
+context, external rankings, identifiers, and the target. Train contains 50,000
+rows, 30,983 \code{gameId}s, and 16 modes; unlabeled test contains 5,000 rows,
+4,431 matches, and 10 modes. The brief assigns train to January--April 2024
+and test to May 2024.
 
 \begin{table}[!h]
 \centering
-\caption{Caractéristiques des données fournies.}
+\caption{Properties of the supplied data.}
 \label{tab:data}
 \small
 \begin{tabular}{@{}lrr@{}}
 \toprule
  & \textbf{Train} & \textbf{Test}\\
 \midrule
-Observations joueur & 50,000 & 5,000\\
-Colonnes & 30 & 29\\
-Colonnes numériques & 25 & 24\\
-Colonnes catégorielles/textuelles & 5 & 5\\
-Valeurs manquantes brutes & 0 & 0\\
-Doublons exacts & 0 & 0\\
-Parties distinctes & 30,983 & 4,431\\
-Modes distincts & 16 & 10\\
+Player rows & 50,000 & 5,000\\
+Columns & 30 & 29\\
+Numeric columns & 25 & 24\\
+Categorical/text columns & 5 & 5\\
+Raw missing values & 0 & 0\\
+Exact duplicates & 0 & 0\\
+Distinct matches & 30,983 & 4,431\\
+Distinct modes & 16 & 10\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Données, qualité et structure d'observation}
+\subsection{Quality, sampling, and outliers}
 
-\textbf{Propre ne veut pas dire fiable.} Le Tableau~\ref{tab:data} confirme
-l'absence de cellule brute manquante et de doublon exact. Cependant, cette
-apparente propreté masque des conventions métier:
-\code{rankPts=-1} concerne 38,38\,\% des lignes et les zéros conditionnels de
-ranking 59,68\,\%. Ces sentinelles deviennent des valeurs absentes accompagnées
-de drapeaux; les rankings externes sont exclus du modèle. Les 93
-\code{gameId} malformés sont regroupés conservativement afin d'empêcher qu'un
-même match traverse deux partitions. Les incohérences gameplay rares sont,
-quant à elles, tracées plutôt que corrigées arbitrairement.
+\textbf{Clean does not mean reliable.} Although Table~\ref{tab:data} contains
+neither raw missing cells nor exact duplicates, it includes business
+conventions: \code{rankPts=-1} affects 38.38\% of rows, and conditionally zero
+ranking values affect 59.68\%. I convert these sentinels to missing values with
+availability flags and exclude external rankings from the model. I group the 93
+malformed \code{gameId}s conservatively so that the same match cannot cross
+partitions. I document rare gameplay inconsistencies rather than correcting
+them arbitrarily.
 
-La Fig.~\ref{fig:data-audit} donne l'échelle de ces décisions. En effet, le train
-n'observe que 1,61 joueur par match en moyenne, huit au maximum, et seulement
-2,34\,\% des lignes ont un coéquipier observé. De plus, l'étendue médiane
-des dates au sein d'un même \code{gameId} atteint 45,03 jours. Ces deux
-résultats empêchent donc de reconstruire fidèlement une équipe ou une chronologie.
+Figure~\ref{fig:data-audit} gives scale to these decisions. Train observes only
+1.61 players per match on average, at most eight, and only 2.34\% of rows have
+an observed teammate. In addition, the median date span within one
+\code{gameId} is 45.03 days. I therefore cannot faithfully reconstruct a team
+or chronology from the observed sample.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.92\columnwidth]{01_data_audit.png}
-\caption{La cible couvre tout l'intervalle $[0,1]$, mais la date et la
-couverture des équipes contredisent deux hypothèses naturelles du problème.
-Ces constats déterminent les features et la validation.}
+\caption{The target spans $[0,1]$, but date assignment and team coverage
+contradict two natural assumptions. I use these findings to determine features
+and validation.}
 \label{fig:data-audit}
 \end{figure}
 
-\subsection{Valeurs extrêmes et anomalies}
+\textbf{A statistical outlier is not automatically an error.} The standard
+$1.5\times IQR$ rule flags 24.91\% of \code{rideDist} and 11.59\% of
+\code{kills}. Both variables are concentrated at zero, so their global lower
+quartile is zero and the threshold becomes artificially low. When I calculate
+IQR only on positive values, those rates fall to 0.66\% and 1.20\%. I retain
+rare maxima because removal or winsorization would erase performance signal. I
+still flag the 53 rows with \code{kills>0} and \code{damages=0}, and the 102
+rows with combat activity but zero distance, as business anomalies.
 
-\textbf{Un outlier statistique n'est pas nécessairement une erreur.} La règle
-classique de Tukey, fondée sur $1,5\times IQR$, signale 24,91\,\% des
-\code{rideDist} et 11,59\,\% des \code{kills} (Tableau~\ref{tab:outliers}). Or
-ces variables sont fortement concentrées à zéro: leur quartile inférieur vaut
-zéro, ce qui rend le seuil global artificiellement bas. Lorsque l'IQR est
-recalculé uniquement sur les valeurs positives, les taux tombent respectivement
-à 0,66\,\% et 1,20\,\%.
+\subsection{Exploration and drift}
 
-\begin{table}[!t]
-\centering
-\caption{Valeurs extrêmes: ampleur et sensibilité de la règle IQR.}
-\label{tab:outliers}
-\scriptsize
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-\textbf{Variable} & \textbf{P99} & \textbf{Max} & \textbf{IQR brut} & \textbf{IQR $>0$}\\
-\midrule
-\code{walkDist} & 4,395 & 11,260 & 0,55\,\% & 0,51\,\%\\
-\code{rideDist} & 6,868 & 31,290 & 24,91\,\% & 0,66\,\%\\
-\code{damages} & 766,6 & 3,725 & 4,89\,\% & 4,64\,\%\\
-\code{kills} & 7 & 35 & 11,59\,\% & 1,20\,\%\\
-\code{weapons} & 10 & 73 & 1,77\,\% & 1,77\,\%\\
-\bottomrule
-\end{tabular}
-\end{table}
+\textbf{The dominant signal is behavioural.} The target mean is 0.4723, its
+median is 0.4579, and its standard deviation is 0.3074. Walking distance is
+the clearest behavioural signal: its Spearman correlation with the target is
+0.866, and mean ranking rises from 0.093 to 0.870 from the first to the last
+walking-distance decile (Figure~\ref{fig:profiles}). I interpret this as a
+marker of progression and survival, not as a causal effect of walking.
 
-Les maxima restent rares, mais ils sont compatibles avec des parties longues
-ou des joueurs très actifs. Ils sont donc conservés, car une suppression ou une
-winsorisation effacerait précisément une partie du signal de performance. En
-revanche, les 53 lignes avec \code{kills>0} et \code{damages=0}, ainsi que les
-102 lignes avec activité de combat mais distance nulle, sont des anomalies
-métier. Elles sont documentées et conservées vu leur rareté, sans être prises
-pour des observations ordinaires.
-
-\subsection{Exploration et stabilité train--test}
-
-\textbf{Le signal dominant est comportemental.} L'exploration cherche ensuite
-ce qui distingue un joueur bien classé. La cible
-a une moyenne de 0,4723, une médiane de 0,4579 et un écart-type de 0,3074. La
-mobilité apparaît comme le signal comportemental le plus net:
-\code{walkDist} présente une corrélation de Spearman de 0,866 avec la cible.
-Entre le premier et le dernier décile de marche, le classement moyen passe de
-0,093 à 0,870 (Fig.~\ref{fig:eda}). Cette relation est interprétée comme un
-marqueur de progression et de survie, non comme un effet causal de la marche.
-
-Le combat est également informatif, mais moins discriminant: les corrélations valent
-0,449 pour les dégâts et 0,425 pour les kills; les joueurs sans kill ont une
-cible moyenne de 0,409 contre 0,816 autour de cinq kills. Les ressources
-racontent une histoire complémentaire, car \code{upgrades}, \code{weapons} et
-\code{heals} atteignent respectivement 0,681, 0,665 et 0,564. Enfin,
-\code{killRank} est fortement associé à la cible ($-0,715$), mais il est déjà
-calculé à la fin du match. Il faut donc séparer un scénario
-comportemental sans rang d'élimination d'un contrat enrichi; les deux reposent
-néanmoins sur des statistiques finales.
+Combat is also informative but less discriminative: damages and kills have
+correlations of 0.449 and 0.425. Resources tell a complementary story.
+\code{killRank} has a strong $-0.715$ target association, but it is computed
+after the match. I therefore distinguish a behavioural contract without it
+from an enriched post-match contract.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.94\columnwidth]{06_eda_profiles.png}
-\caption{Classement moyen par quantile. Mobilité, kills et améliorations
-augmentent avec la performance; \code{killRank} décroît fortement. Ces formes
-non linéaires motivent les features et les modèles d'arbres.}
-\label{fig:eda}
+\caption{Mean ranking by quantile. Mobility, kills, and upgrades increase with
+performance, whereas \code{killRank} decreases sharply. These nonlinear shapes
+motivate tree-based models.}
+\label{fig:profiles}
 \end{figure}
 
-\textbf{Train et test se ressemblent.} Enfin, puisque le test appartient
-officiellement au mois suivant, sa comparabilité est contrôlée sans utiliser de
-cible. Les PSI numériques et catégoriels
-maximaux valent 0,00509 et 0,00844; une validation adversariale atteint un ROC
-AUC de 0,4933. La Fig.~\ref{fig:drift} ne révèle donc aucun drift matériel sur
-les variables mesurées; cependant, elle ne prouve ni l'absence de drift de
-performance, impossible à tester sans cible, ni une chronologie fiable.
+I also compare train and test without using a test target. Maximum numeric and
+categorical PSI are 0.00509 and 0.00844, while adversarial validation reaches
+ROC AUC 0.4933. Figure~\ref{fig:drift} therefore shows no material shift for
+the measured feature contract. It does not prove future performance stability,
+and inconsistent dates cannot support a temporal interpretation.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.90\columnwidth]{05_drift_diagnostics.png}
-\caption{Les PSI restent très inférieurs au repère diagnostique 0,1 et le
-classifieur adversarial ne sépare pas train et test. Le test paraît comparable
-sur le contrat de features, sans fournir de preuve de performance future.}
+\caption{PSI values stay well below the 0.1 diagnostic guide, and the
+adversarial classifier cannot separate train from test. This supports feature
+comparability, not a claim about future performance.}
 \label{fig:drift}
 \end{figure}
 
-\section{Approche proposée}
+\section{Method}
 
-\subsection{Prétraitement et stratégie de validation}
+\subsection{Validation before modeling}
 
-\textbf{La validation est définie avant les modèles.} Un split aléatoire par
-ligne suppose les joueurs indépendants; or il place 56,64\,\% des lignes de
-validation dans des matchs déjà vus, si bien que le score peut bénéficier d'un
-contexte partagé. Tous les joueurs d'un match sont donc gardés du même côté.
-D'abord, un holdout de 9,872 lignes est gelé par groupe; ensuite, les 40,128
-lignes restantes servent seules à la sélection dans cinq folds
-\code{GroupKFold}. Ainsi, aucun \code{gameId} ne traverse une partition.
+\textbf{I define validation before comparing models.} A row-random split treats
+players as independent, yet 56.64\% of its validation rows come from already
+seen matches. I keep each match on one side of a partition. First, I freeze a
+9,872-row grouped holdout; the remaining 40,128 rows alone feed 5-fold
+\code{GroupKFold}, so no \code{gameId} crosses a partition.
 
-La Fig.~\ref{fig:validation} compare quatre stratégies. La version
-pseudo-temporelle purgée supprime la fuite, mais elle perd 8,536 lignes et ne
-répare pas les dates contradictoires. Elle reste donc un stress test, tandis
-que le split groupé constitue la preuve principale. Une sensibilité à 3, 5, 7
-et 10 folds confirme CatBoost dans les 25 partitions. Cinq folds sont finalement
-retenus: environ 8,026 lignes par fold, alors que sept coûtent 52\,\% de plus
-pour seulement 0,000189 de MAE nominale.
+The purged pseudo-temporal split removes leakage but drops 8,536 rows and does
+not repair contradictory dates. I retain it only as a stress test; grouped
+validation is the primary evidence. A sensitivity study over 3, 5, 7, and 10
+folds confirms CatBoost in all 25 partitions. I retain five folds: about 8,026
+rows per fold, while seven folds cost 52\% more for only 0.000189 nominal MAE
+improvement.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.90\columnwidth]{03_validation_protocol.png}
-\caption{Un score proche ne rend pas un split valide. Le groupement et la
-purge ramènent à zéro les matchs déjà vus; le protocole principal privilégie
-donc la validité de l'estimation.}
+\caption{A similar score does not make a split valid. Grouping and purging
+remove seen matches; my primary protocol prioritizes valid estimation.}
 \label{fig:validation}
 \end{figure}
 
-\subsection{Construction des variables}
+\subsection{Features and model selection}
 
-\textbf{Le modèle reste volontairement compact.} Une fois le protocole fixé,
-les résultats exploratoires sont transformés en un contrat commun à tous les
-modèles. Huit
-mesures brutes sont conservées; quatre résumés sont créés:
-\code{walkDist}/(\code{gameTime}/60), dégâts par kill (zéro sans kill), activité
-combat $=$ kills $+$ assists $+$ knocks et activité ressources $=$ armes $+$
-améliorations $+$ soins. Trois indicateurs encodent solo, duo et squad, les
-modes spéciaux servant de référence. \code{killRank} forme la seizième variable
-du contrat enrichi.
+\textbf{I keep the contract deliberately compact.} I retain eight raw measures
+and create four summaries: \code{walkDist}/(\code{gameTime}/60), damage per
+kill (zero with no kill), combat activity $=$ kills $+$ assists $+$ knocks, and
+resource activity $=$ weapons $+$ upgrades $+$ heals. Three indicators encode
+solo, duo, and squad, with special modes as reference. \code{killRank} is the
+sixteenth feature in the enriched contract.
 
-Le Tableau~\ref{tab:features} montre que les idées plausibles ne sont pas toutes
-retenues. La distance totale est trop redondante avec la marche; la mobilité
-par seconde utilise la durée globale du match, pas le temps de survie; le ratio
-de headshots n'est défini que pour 43,03\,\% des joueurs; le support est nul
-dans 74,17\,\% des cas. Leur valeur descriptive ne justifie pas leur ajout au
-modèle compact.
-
-\begin{table}[!t]
-\centering
-\caption{Construction des variables guidée par une preuve hors échantillon.}
-\label{tab:features}
-\scriptsize
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.25\columnwidth}
-                >{\raggedright\arraybackslash}p{0.43\columnwidth}
-                >{\raggedright\arraybackslash}p{0.22\columnwidth}@{}}
-\toprule
-\textbf{Idée} & \textbf{Preuve} & \textbf{Décision}\\
-\midrule
-Mobilité brute + marche/minute & MAE 0,26771 $\rightarrow$ 0,09841 & retenue\\
-Combat et dégâts/kill & gain MAE 0,00290 & retenus\\
-Ressources agrégées & gain MAE 0,00285 & retenues\\
-\code{killRank} & gain MAE 0,03116; information finale & retenu, post-match\\
-Distance totale, vitesse, \code{highestKill}, headshots, support & redondance, ambiguïté ou faible support & rejetés\\
-Équipe/lobby & couverture observée insuffisante & rejetés\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-L'ablation de la Fig.~\ref{fig:ablation} utilise toujours CatBoost par défaut
-et les mêmes folds groupés. Elle confirme d'abord que la mobilité porte le gain
-comportemental majeur, puis que le combat et les ressources ajoutent un signal stable.
-Sans \code{killRank}, la MAE vaut 0,09266; avec lui, 0,06150. Les deux scénarios
-restent post-partie; le second utilise une information finale particulièrement forte.
+The ablation in Figure~\ref{fig:ablation} confirms that mobility provides the
+main behavioural gain, while combat and resources add stable signal. Without
+\code{killRank}, MAE is 0.09266; with it, MAE is 0.06150. Both scenarios are
+post-match, but the latter uses particularly strong final-match information.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.90\columnwidth]{02_feature_ablation.png}
-\caption{Ablation progressive sur validation groupée. Chaque famille est
-conservée pour son gain reproductible; le saut final quantifie le rôle central
-de l'information post-match \code{killRank}.}
+\caption{Progressive grouped-validation ablation. I retain each family for its
+reproducible gain; the final step quantifies the central role of post-match
+\code{killRank}.}
 \label{fig:ablation}
 \end{figure}
 
-\subsection{Sélection des modèles}
-
-\textbf{La règle de choix précède les scores.} La progression est fixée avant
-les résultats: d'abord les Dummy moyenne/médiane, ensuite Ridge, puis Random
-Forest, XGBoost, LightGBM et CatBoost non optimisés. Pour garantir
-l'équité, ils reçoivent les mêmes 16 variables, lignes et folds, tandis que
-leurs hyperparamètres d'apprentissage restent aux valeurs par défaut. La MAE
-est le critère principal:
+I compare mean/median Dummy regressors, Ridge, Random Forest, XGBoost,
+LightGBM, and CatBoost on the same 16 features, rows, and folds. The primary
+criterion is
 \[
 \operatorname{MAE}=\frac{1}{n}\sum_{i=1}^{n}\left|y_i-\hat y_i\right|.
 \]
-Elle mesure donc l'écart moyen de classement sur l'échelle naturelle $[0,1]$,
-où chaque joueur a le même poids. Contrairement au RMSE, elle n'est pas
-dominée par quelques erreurs extrêmes; celles-ci sont néanmoins étudiées
-séparément. La stabilité, l'écart train--validation, le RMSE et $R^2$
-complètent la décision.
+MAE measures the average ranking gap on the natural $[0,1]$ scale, giving each
+player equal weight. Unlike RMSE, it is not dominated by a few extreme errors;
+I nevertheless inspect those errors separately. Fold stability, the
+train--validation gap, RMSE, and $R^2$ complete the decision.
 
-\subsection{Optimisation des hyperparamètres}
-
-Une fois le meilleur modèle identifié, huit configurations
-\code{RandomizedSearchCV} explorent les itérations, la profondeur, le
-\textit{learning rate}, la régularisation, l'aléa et la discrétisation. La
-recherche réutilise exactement les mêmes cinq folds groupés, et le tuning
-n'est conservé que s'il améliore la MAE du modèle par défaut.
-
-\section{Résultats}
+\section{Results, interpretation, and limitations}
 
 \begin{table}[!h]
 \centering
-\caption{Comparaison initiale sur les cinq folds groupés du développement.}
+\caption{Initial comparison on five grouped development folds.}
 \label{tab:models}
 \scriptsize
 \begin{tabular}{lrrrr}
 \toprule
-\textbf{Modèle} & \textbf{MAE} & \textbf{$\sigma$} & \textbf{MAE train} & \textbf{$R^2$}\\
+\textbf{Model} & \textbf{MAE} & \textbf{$\sigma$} & \textbf{Train MAE} & \textbf{$R^2$}\\
 \midrule
-\textbf{CatBoost} & \textbf{0,06145} & 0,00109 & 0,05527 & 0,92083\\
-XGBoost & 0,06345 & 0,00107 & 0,05044 & 0,91499\\
-LightGBM & 0,06359 & 0,00091 & 0,05949 & 0,91597\\
-Random Forest & 0,06668 & 0,00077 & 0,02472 & 0,90576\\
-Ridge & 0,08831 & 0,00140 & 0,08826 & 0,84177\\
-Dummy médiane & 0,26788 & 0,00082 & 0,26786 & $-0,00294$\\
+\textbf{CatBoost} & \textbf{0.06145} & 0.00109 & 0.05527 & 0.92083\\
+XGBoost & 0.06345 & 0.00107 & 0.05044 & 0.91499\\
+LightGBM & 0.06359 & 0.00091 & 0.05949 & 0.91597\\
+Random Forest & 0.06668 & 0.00077 & 0.02472 & 0.90576\\
+Ridge & 0.08831 & 0.00140 & 0.08826 & 0.84177\\
+Median Dummy & 0.26788 & 0.00082 & 0.26786 & $-0.00294$\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Le Tableau~\ref{tab:models} montre que CatBoost bat XGBoost dans les cinq folds,
-de 0,00200 MAE en moyenne, et présente
-un écart train--validation modéré. Random Forest montre au contraire le plus
-fort surajustement. CatBoost est donc choisi \emph{avant} tuning. Cependant, le
-meilleur essai optimisé atteint 0,06167, soit 0,00022 de moins bien que le
-défaut: le tuning est \decision{rejeté} et la configuration simple est conservée.
+Table~\ref{tab:models} shows that CatBoost beats XGBoost in every fold by
+0.00200 MAE on average and has a moderate train--validation gap. Random Forest
+shows the strongest overfitting. I select CatBoost \emph{before} tuning. Eight
+bounded \code{RandomizedSearchCV} trials then produce a best MAE of 0.06167,
+0.00022 worse than the default: I \decision{reject} tuning and retain the
+simpler configuration.
 
-\subsection{Performance finale et interprétation}
-
-\textbf{Le modèle gelé confirme sa performance.} Enfin, CatBoost est ouvert sur le holdout groupé: MAE
-\textbf{0,06080}, RMSE 0,08660, $R^2=0,92083$ et écart train--holdout 0,00503.
-Ce holdout est indépendant du cycle final de sélection, mais pas historiquement
-vierge, car des analyses exploratoires antérieures avaient vu tout le train.
-
-La permutation de la Fig.~\ref{fig:interpretation} et les valeurs TreeSHAP
-natives de CatBoost convergent: \code{killRank} domine, suivi de la marche par
-minute, des kills et de \code{maxRank}. Les SHAP calculés sur 2,000 lignes du
-holdout reconstruisent chaque prédiction brute; ils décrivent une dépendance
-prédictive, non un effet causal. L'erreur varie aussi selon le contexte: 0,047
-en solo, 0,052 en duo, 0,070 en squad et 0,101 dans les modes spéciaux, ces
-derniers ne comptant que 102 lignes de développement.
+\textbf{The frozen model confirms performance.} CatBoost reaches grouped-holdout
+MAE \textbf{0.06080}, RMSE 0.08660, $R^2=0.92083$, and a 0.00503
+train--holdout gap. Permutation importance and native CatBoost TreeSHAP agree:
+\code{killRank} dominates, followed by walking distance per minute, kills, and
+\code{maxRank}. The SHAP values computed on 2,000 holdout rows reconstruct each
+raw prediction and describe predictive dependency, not a causal effect.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.88\columnwidth]{04_interpretation_errors.png}
-\caption{Ce que le modèle utilise et où il échoue. L'importance confirme le
-poids du rang d'élimination et de la mobilité; l'erreur croît sur les modes
-moins représentés et plus complexes.}
+\caption{What the model uses and where it fails. Importance confirms the role
+of kill ranking and mobility; error grows in less represented, more complex
+modes.}
 \label{fig:interpretation}
 \end{figure}
 
-\subsection{Comprendre les outliers de prédiction}
-
-\textbf{Les erreurs extrêmes complètent la MAE moyenne.} Les prédictions
-out-of-fold restent globalement centrées autour de la cible; toutefois, la
-Fig.~\ref{fig:error-outliers} met en évidence une régression vers la moyenne.
-Sur la bande de cible $[0,9;1]$, la MAE monte à 0,0811 et le biais atteint
-$-0,0755$: les meilleurs classements sont donc sous-estimés en moyenne.
+\textbf{Extreme errors complement mean MAE.} Out-of-fold predictions are
+generally centered around the target, but residuals reveal regression to the
+mean. On target band $[0.9,1]$, MAE rises to 0.0811 and bias reaches $-0.0755$:
+the best rankings are underestimated on average. Two solo cases reach absolute
+error 1.0 despite \code{maxRank=18}, zero kills, zero distance, and seven
+weapons. Missing match context, atypical rows, or label noise may explain this
+contrast; I retain those cases because deleting them after observing error would
+bias evaluation.
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.96\columnwidth]{11_error_diagnostics.png}
-\caption{Analyse out-of-fold des résidus. La majorité des erreurs reste proche
-de zéro; cependant, la performance se dégrade aux cibles les plus élevées et
-dans les modes les moins représentés.}
+\caption{Grouped-holdout residual analysis. Most errors remain near zero, but
+performance degrades at the highest targets and in under-represented modes.}
 \label{fig:error-outliers}
 \end{figure}
 
-\newpage
-Les 25 plus grandes erreurs ont ensuite été relues individuellement. Deux cas
-solo atteignent une erreur absolue de 1,0: tous deux ont \code{maxRank=18}, zéro
-kill, zéro distance et sept armes, mais l'un a une cible de 1 et une prédiction
-de 0, tandis que l'autre présente l'inverse. Leurs dégâts et \code{killRank}
-diffèrent, sans suffire à expliquer ce contraste de survie. Celui-ci peut donc
-provenir d'un contexte de match manquant, d'une ligne atypique ou d'un bruit
-d'étiquette. Ces lignes sont conservées et
-documentées, car les supprimer après observation de l'erreur biaiserait
-l'évaluation. De même, les parties avec \code{maxRank<=5} affichent une MAE de
-0,329, mais seulement sur 20 lignes: elles constituent une alerte de collecte,
-et non une conclusion générale.
+\textbf{This result remains strictly post-match.} All available statistics are
+post-match, inconsistent dates prevent credible future validation, rosters and
+matches are incomplete, and test has no target, so performance drift is
+unknown. A production version would require decision-time snapshots, complete
+teams, a coherent match date, and a genuinely labeled future batch.
 
-\section{Discussion}
-
-\textbf{Ce résultat reste strictement post-partie.} Quatre limites l'encadrent.
-Premièrement, toutes les statistiques sont post-partie: aucune anticipation
-early-game n'est démontrée. Deuxièmement,
-les dates incohérentes interdisent une validation future crédible. Troisièmement,
-les rosters et matchs sont incomplets, donc le contexte collectif réel manque.
-Enfin, le test n'a pas de cible; son drift de performance reste donc inconnu. Une
-version produit exigerait des snapshots décisionnels, des équipes complètes et
-un futur lot étiqueté.
-
-\noindent\textbf{Conclusion.}
-La démarche relie ainsi compréhension, qualité, outliers, exploration,
-validation, modélisation et interprétation. CatBoost atteint 0,06080 de MAE
-avec un protocole groupé, explicite et reproductible; néanmoins, les erreurs
-extrêmes rappellent que le contexte collectif et temporel reste incomplet.
+\noindent\textbf{Conclusion.} I connect problem understanding, quality checks,
+outliers, exploration, validation, modeling, and interpretation. CatBoost
+achieves 0.06080 MAE with an explicit, reproducible grouped protocol, while the
+remaining extreme errors underline incomplete collective and temporal context.
 
 \end{document}

@@ -86,9 +86,9 @@ def test_error_diagnostics_and_overfitting_labels(player_frame):
     prediction = np.full(len(player_frame), 0.5)
     diagnostic = error_by_match_size(player_frame, prediction)
     assert diagnostic["rows"].sum() == len(player_frame)
-    assert overfitting_comment(0.099, 0.1) == "faible écart"
-    assert overfitting_comment(0.085, 0.1) == "écart modéré"
-    assert overfitting_comment(0.01, 0.1) == "écart élevé"
+    assert overfitting_comment(0.099, 0.1) == "small gap"
+    assert overfitting_comment(0.085, 0.1) == "moderate gap"
+    assert overfitting_comment(0.01, 0.1) == "large gap"
 
 
 def test_notebook_visualizations_return_axes(player_frame):

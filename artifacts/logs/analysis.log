@@ -31,3 +31,20 @@
 2026-08-02T13:09:42 | INFO | game_player_analysis.pipeline | Analysis complete: final holdout MAE 0.060797
 2026-08-02T13:10:32 | INFO | game_player_analysis.pipeline | Fitting and publishing CatBoost on all labeled rows
 2026-08-02T13:10:35 | INFO | game_player_analysis.pipeline | Analysis complete: final holdout MAE 0.060797
+2026-08-03T09:51:19 | INFO | game_player_analysis.pipeline | Loading and validating official train/test files
+2026-08-03T09:51:21 | INFO | game_player_analysis.pipeline | Benchmarking defaults on development folds only
+2026-08-03T09:52:25 | INFO | game_player_analysis.pipeline | Loading and validating official train/test files
+2026-08-03T09:52:30 | INFO | game_player_analysis.pipeline | Benchmarking defaults on development folds only
+2026-08-03T09:53:08 | INFO | game_player_analysis.pipeline | Loading and validating official train/test files
+2026-08-03T09:53:13 | INFO | game_player_analysis.pipeline | Benchmarking defaults on development folds only
+2026-08-03T09:54:50 | INFO | game_player_analysis.pipeline | Tuning fair-comparison winner CatBoost (8 trials)
+2026-08-03T09:55:53 | INFO | game_player_analysis.pipeline | Tuning fair-comparison winner CatBoost (8 trials)
+2026-08-03T09:56:36 | INFO | game_player_analysis.pipeline | Tuning fair-comparison winner CatBoost (8 trials)
+2026-08-03T10:00:26 | INFO | game_player_analysis.pipeline | Evaluating frozen selection once on the cycle holdout
+2026-08-03T10:00:34 | INFO | game_player_analysis.pipeline | Auditing feature families, splits, errors and interpretability
+2026-08-03T10:00:51 | INFO | game_player_analysis.pipeline | Evaluating frozen selection once on the cycle holdout
+2026-08-03T10:00:59 | INFO | game_player_analysis.pipeline | Auditing feature families, splits, errors and interpretability
+2026-08-03T10:01:05 | INFO | game_player_analysis.pipeline | Evaluating frozen selection once on the cycle holdout
+2026-08-03T10:01:15 | INFO | game_player_analysis.pipeline | Auditing feature families, splits, errors and interpretability
+2026-08-03T10:04:15 | INFO | game_player_analysis.pipeline | Fitting and publishing CatBoost on all labeled rows
+2026-08-03T10:04:27 | INFO | game_player_analysis.pipeline | Analysis complete: final holdout MAE 0.060797

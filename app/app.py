@@ -46,22 +46,22 @@ st.set_page_config(
 
 
 PAGES = (
-    "Découvrir",
-    "1 · Fichiers",
+    "Discover",
+    "1 · Files",
     "2 · Explorer",
-    "3 · Modèle",
-    "4 · Prédictions",
+    "3 · Model",
+    "4 · Predictions",
 )
 
 DISPLAY_NAMES = {
-    "walkDist": "Distance parcourue à pied",
-    "rideDist": "Distance en véhicule",
-    "damages": "Dégâts infligés",
-    "kills": "Éliminations",
-    "weapons": "Armes utilisées",
-    "gameTime": "Durée de la partie",
-    "killRank": "Rang selon les éliminations",
-    TARGET: "Classement final normalisé",
+    "walkDist": "Walking distance",
+    "rideDist": "Vehicle distance",
+    "damages": "Damage dealt",
+    "kills": "Kills",
+    "weapons": "Weapons used",
+    "gameTime": "Match duration",
+    "killRank": "Kill ranking",
+    TARGET: "Normalized final ranking",
 }
 
 
@@ -166,21 +166,21 @@ def _page_heading(kicker: str, title: str, description: str) -> None:
 
 
 def _number(value: float, digits: int = 4) -> str:
-    return f"{value:.{digits}f}".replace(".", ",")
+    return f"{value:.{digits}f}"
 
 
 def _format_count(value: int | float) -> str:
-    return f"{int(value):,}".replace(",", " ")
+    return f"{int(value):,}"
 
 
 def _require_train() -> pd.DataFrame | None:
     train = st.session_state.get("private_train")
     if train is None:
-        st.info("Commencez par ajouter votre fichier d'entraînement à l'étape 1.")
+        st.info("Start by adding your training file in step 1.")
         st.button(
-            "Ajouter mes fichiers",
+            "Add my files",
             on_click=_navigate_to,
-            args=("1 · Fichiers",),
+            args=("1 · Files",),
         )
         return None
     return train
@@ -203,10 +203,10 @@ def _outlier_overview(frame: pd.DataFrame) -> pd.DataFrame:
             positive_rate = 100 * positive.gt(p3 + 1.5 * (p3 - p1)).mean()
         rows.append(
             {
-                "Variable": DISPLAY_NAMES[feature],
-                "Valeurs atypiques (toutes)": 100 * values.gt(threshold).mean(),
-                "Valeurs atypiques (> 0)": positive_rate,
-                "Valeur élevée (P99)": values.quantile(0.99),
+                "Feature": DISPLAY_NAMES[feature],
+                "Outliers (all values)": 100 * values.gt(threshold).mean(),
+                "Outliers (> 0)": positive_rate,
+                "High value (P99)": values.quantile(0.99),
             }
         )
     return pd.DataFrame(rows)
@@ -216,11 +216,11 @@ def _draw_distribution(frame: pd.DataFrame, feature: str) -> None:
     figure, axis = plt.subplots(figsize=(8.5, 4.1))
     values = frame[feature].dropna()
     axis.hist(values, bins=45, color="#2878B5", alpha=0.88, edgecolor="white")
-    axis.axvline(values.median(), color="#D9822B", linestyle="--", label="valeur médiane")
+    axis.axvline(values.median(), color="#D9822B", linestyle="--", label="median value")
     axis.set(
-        title=f"Répartition — {DISPLAY_NAMES.get(feature, feature)}",
+        title=f"Distribution — {DISPLAY_NAMES.get(feature, feature)}",
         xlabel=DISPLAY_NAMES.get(feature, feature),
-        ylabel="Nombre de joueurs",
+        ylabel="Number of players",
     )
     axis.legend(frameon=False)
     figure.tight_layout()
@@ -232,9 +232,9 @@ def _draw_target_relationship(frame: pd.DataFrame, feature: str) -> None:
     figure, axis = plt.subplots(figsize=(8.5, 4.1))
     axis.scatter(sampled[feature], sampled[TARGET], s=9, alpha=0.18, color="#2878B5")
     axis.set(
-        title=f"Lien observé — {DISPLAY_NAMES.get(feature, feature)}",
+        title=f"Observed relationship — {DISPLAY_NAMES.get(feature, feature)}",
         xlabel=DISPLAY_NAMES.get(feature, feature),
-        ylabel="Classement final normalisé",
+        ylabel="Normalized final ranking",
         ylim=(0, 1),
     )
     figure.tight_layout()
@@ -245,47 +245,45 @@ def _render_home() -> None:
     st.markdown(
         """
         <div class="welcome">
-          <h1>Analysez le résultat d'une partie, simplement.</h1>
-          <p>Une visite guidée de mon projet Data Science GameLoft : explorer des statistiques de jeu,
-          comprendre la qualité du modèle et produire des prédictions, sans publier les données.</p>
+          <h1>Explore a match result, simply.</h1>
+          <p>A guided tour of my GameLoft Data Science project: explore game statistics,
+          understand model quality, and create predictions without publishing the data.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
     st.markdown(
-        "<div class='notice'><b>Vos fichiers restent privés.</b> Ils sont lus uniquement en mémoire pendant votre session. "
-        "L'application ne les enregistre pas et n'appelle aucun service externe.</div>",
+        "<div class='notice'><b>Your files remain private.</b> They are read in memory only during your session. "
+        "The application does not store them or call an external service.</div>",
         unsafe_allow_html=True,
     )
     st.button(
-        "Commencer avec mes fichiers",
+        "Start with my files",
         type="primary",
         on_click=_navigate_to,
-        args=("1 · Fichiers",),
+        args=("1 · Files",),
     )
-    st.markdown(
-        "<div class='section-title'>Votre parcours en quatre étapes</div>", unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-title'>Your four-step journey</div>", unsafe_allow_html=True)
     cards = [
         (
-            "Étape 1",
-            "Ajouter",
-            "Déposez le fichier d'entraînement, puis le fichier test si vous l'avez.",
+            "Step 1",
+            "Add",
+            "Upload the training file, then the test file if you have it.",
         ),
         (
-            "Étape 2",
+            "Step 2",
             "Explorer",
-            "Repérez les tendances, valeurs atypiques et signaux utiles avec des graphiques lisibles.",
+            "Spot useful patterns, outliers, and signals through clear charts.",
         ),
         (
-            "Étape 3",
-            "Comprendre",
-            "Voyez comment la fiabilité du modèle a été contrôlée et ce qui influence ses estimations.",
+            "Step 3",
+            "Understand",
+            "See how I checked model reliability and what influences its estimates.",
         ),
         (
-            "Étape 4",
-            "Prédire",
-            "Utilisez le modèle de référence ou ajustez quelques paramètres, puis téléchargez votre fichier.",
+            "Step 4",
+            "Predict",
+            "Use the reference model or adjust a few parameters, then download your file.",
         ),
     ]
     for column, (number, title, description) in zip(st.columns(4), cards):
@@ -296,42 +294,40 @@ def _render_home() -> None:
         )
 
     st.markdown(
-        "<div class='section-title'>Ce que montre le projet, même sans import</div>",
+        "<div class='section-title'>What the project shows, even before upload</div>",
         unsafe_allow_html=True,
     )
     holdout = _artifact_csv("final_holdout_evaluation.csv")
     if holdout is not None and not holdout.empty:
         metrics = holdout.iloc[0]
         cards = st.columns(3)
-        cards[0].metric("Erreur moyenne du modèle", _number(float(metrics["mae"]), 5))
+        cards[0].metric("Model mean error", _number(float(metrics["mae"]), 5))
         cards[1].metric(
-            "Parties gardées pour le contrôle final", _format_count(metrics["holdout_rows"])
+            "Matches held out for final evaluation", _format_count(metrics["holdout_rows"])
         )
-        cards[2].metric("Qualité globale (R²)", _number(float(metrics["r2"]), 3))
+        cards[2].metric("Overall fit (R²)", _number(float(metrics["r2"]), 3))
     st.caption(
-        "Le modèle estime un classement final normalisé après une partie. Il ne sert pas à prédire en direct pendant la partie."
+        "The model estimates a normalized final ranking after a match. It is not intended for live in-match prediction."
     )
 
 
 def _render_uploads() -> None:
     _page_heading(
-        "Étape 1 · Données privées",
-        "Ajoutez vos fichiers en toute confiance.",
-        "Le fichier d'entraînement permet l'exploration et le réglage du modèle. Le fichier test est facultatif et sert uniquement à créer des prédictions.",
+        "Step 1 · Private data",
+        "Add your files with confidence.",
+        "The training file enables exploration and model tuning. The test file is optional and is only used to create predictions.",
     )
     st.markdown(
-        "<div class='plain-note'><b>Quel fichier choisir ?</b> Le fichier <b>d'entraînement</b> contient la colonne "
-        "<code>winRankPercentage</code>. Le fichier <b>test</b> ne contient pas cette colonne. Les deux fichiers "
-        "doivent être des CSV séparés par des points-virgules.</div>",
+        "<div class='plain-note'><b>Which file should I choose?</b> The <b>training</b> file contains the "
+        "<code>winRankPercentage</code> column. The <b>test</b> file does not. Both files must be "
+        "semicolon-separated CSV files.</div>",
         unsafe_allow_html=True,
     )
     train_column, test_column = st.columns(2)
     with train_column:
-        st.markdown("#### Fichier d'entraînement")
-        st.caption("Indispensable pour explorer les données ou tester une variante du modèle.")
-        train_upload = st.file_uploader(
-            "Choisir le fichier d'entraînement", type="csv", key="train_upload"
-        )
+        st.markdown("#### Training file")
+        st.caption("Required to explore the data or evaluate a model variant.")
+        train_upload = st.file_uploader("Choose the training file", type="csv", key="train_upload")
         if train_upload is not None:
             try:
                 payload = train_upload.getvalue()
@@ -342,13 +338,13 @@ def _render_uploads() -> None:
                 st.session_state["private_train"] = train
                 st.session_state["private_train_name"] = train_upload.name
                 st.session_state["private_train_signature"] = signature
-                st.success(f"Fichier prêt : {_format_count(len(train))} lignes analysables.")
+                st.success(f"File ready: {_format_count(len(train))} analyzable rows.")
             except Exception as error:
-                st.error(f"Ce fichier ne peut pas être utilisé : {error}")
+                st.error(f"This file cannot be used: {error}")
     with test_column:
-        st.markdown("#### Fichier test — facultatif")
-        st.caption("Ajoutez-le lorsque vous souhaitez créer un fichier de prédictions.")
-        test_upload = st.file_uploader("Choisir le fichier test", type="csv", key="test_upload")
+        st.markdown("#### Test file — optional")
+        st.caption("Add it when you want to create a prediction file.")
+        test_upload = st.file_uploader("Choose the test file", type="csv", key="test_upload")
         if test_upload is not None:
             try:
                 payload = test_upload.getvalue()
@@ -362,36 +358,36 @@ def _render_uploads() -> None:
                 st.session_state["private_test"] = test
                 st.session_state["private_test_name"] = test_upload.name
                 st.session_state["private_test_signature"] = signature
-                st.success(f"Fichier prêt : {_format_count(len(test))} lignes à prédire.")
+                st.success(f"File ready: {_format_count(len(test))} rows to predict.")
             except Exception as error:
-                st.error(f"Ce fichier ne peut pas être utilisé : {error}")
+                st.error(f"This file cannot be used: {error}")
 
     train = st.session_state.get("private_train")
     if train is None:
-        st.info("Une fois le fichier d'entraînement ajouté, un résumé clair apparaîtra ici.")
+        st.info("A clear summary will appear here once you add the training file.")
         return
-    st.markdown("<div class='section-title'>Résumé instantané</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Instant summary</div>", unsafe_allow_html=True)
     summary, issues = private_data_overview(train)
     cards = st.columns(4)
-    cards[0].metric("Joueurs", _format_count(summary["rows"]))
-    cards[1].metric("Parties", _format_count(summary["matches"]))
-    cards[2].metric("Modes de jeu", int(summary["game_modes"]))
-    cards[3].metric("Valeurs manquantes", int(summary["missing_cells"]))
-    with st.expander("Voir un aperçu et les contrôles de qualité"):
+    cards[0].metric("Players", _format_count(summary["rows"]))
+    cards[1].metric("Matches", _format_count(summary["matches"]))
+    cards[2].metric("Game modes", int(summary["game_modes"]))
+    cards[3].metric("Missing values", int(summary["missing_cells"]))
+    with st.expander("View the preview and quality checks"):
         left, right = st.columns([1.45, 1])
         with left:
-            st.caption("Aperçu sans identifiants de joueur ni de partie.")
+            st.caption("Preview without player or match identifiers.")
             st.dataframe(_private_preview(train), width="stretch", height=300)
         with right:
-            st.caption("Points à examiner ; aucune ligne n'est supprimée automatiquement.")
+            st.caption("Items to review; no row is deleted automatically.")
             st.dataframe(issues.rename("occurrences").to_frame(), width="stretch")
 
 
 def _render_exploration() -> None:
     _page_heading(
-        "Étape 2 · Exploration",
-        "Comprendre ce que racontent les statistiques.",
-        "Choisissez une statistique : l'application montre sa répartition, son lien observé avec le classement et les valeurs inhabituelles à examiner.",
+        "Step 2 · Exploration",
+        "Understand what the statistics reveal.",
+        "Choose a statistic: the application shows its distribution, observed relationship with ranking, and unusual values to review.",
     )
     train = _require_train()
     if train is None:
@@ -403,14 +399,14 @@ def _render_exploration() -> None:
         available_features.index("walkDist") if "walkDist" in available_features else 0
     )
     feature = st.selectbox(
-        "Quelle statistique souhaitez-vous regarder ?",
+        "Which statistic would you like to inspect?",
         available_features,
         index=default_feature,
         format_func=lambda value: DISPLAY_NAMES[value],
     )
     st.markdown(
-        "<div class='plain-note'><b>Comment lire ces graphiques ?</b> Ils décrivent les données importées. "
-        "Une tendance visible n'établit pas à elle seule une relation de cause à effet.</div>",
+        "<div class='plain-note'><b>How should I read these charts?</b> They describe the uploaded data. "
+        "A visible pattern does not establish a causal relationship on its own.</div>",
         unsafe_allow_html=True,
     )
     left, right = st.columns([1.1, 1])
@@ -420,52 +416,52 @@ def _render_exploration() -> None:
         _draw_target_relationship(train, feature)
 
     st.markdown(
-        "<div class='section-title'>Valeurs inhabituelles : comprendre avant d'agir</div>",
+        "<div class='section-title'>Unusual values: understand before acting</div>",
         unsafe_allow_html=True,
     )
     st.dataframe(
         _outlier_overview(train).style.format(
             {
-                "Valeurs atypiques (toutes)": "{:.2f}%",
-                "Valeurs atypiques (> 0)": "{:.2f}%",
-                "Valeur élevée (P99)": "{:.2f}",
+                "Outliers (all values)": "{:.2f}%",
+                "Outliers (> 0)": "{:.2f}%",
+                "High value (P99)": "{:.2f}",
             }
         ),
         width="stretch",
         hide_index=True,
     )
     st.caption(
-        "Certaines statistiques comportent beaucoup de zéros. La seconde mesure compare alors uniquement les valeurs positives, pour éviter de qualifier abusivement des observations d'atypiques."
+        "Some statistics contain many zeros. The second measure therefore compares only positive values to avoid wrongly labeling ordinary observations as outliers."
     )
 
 
 def _render_model_overview() -> None:
     _page_heading(
-        "Étape 3 · Le modèle",
-        "Pourquoi faire confiance à cette estimation ?",
-        "Cette page sépare deux questions : la précision observée du modèle et les statistiques qui contribuent le plus à une prédiction.",
+        "Step 3 · The model",
+        "Why trust this estimate?",
+        "This page separates two questions: the model's observed accuracy and the statistics that contribute most to a prediction.",
     )
-    tabs = st.tabs(("Fiabilité mesurée", "Ce que le modèle regarde"))
+    tabs = st.tabs(("Measured reliability", "What the model uses"))
     with tabs[0]:
         holdout = _artifact_csv("final_holdout_evaluation.csv")
         if holdout is not None and not holdout.empty:
             metrics = holdout.iloc[0]
             cards = st.columns(3)
-            cards[0].metric("Erreur moyenne (MAE)", _number(float(metrics["mae"]), 5))
-            cards[1].metric("Erreur quadratique (RMSE)", _number(float(metrics["rmse"]), 5))
-            cards[2].metric("Qualité globale (R²)", _number(float(metrics["r2"]), 3))
+            cards[0].metric("Mean absolute error (MAE)", _number(float(metrics["mae"]), 5))
+            cards[1].metric("Root mean squared error (RMSE)", _number(float(metrics["rmse"]), 5))
+            cards[2].metric("Overall fit (R²)", _number(float(metrics["r2"]), 3))
         st.markdown(
-            "<div class='plain-note'><b>La mesure principale est la MAE.</b> Elle correspond à l'écart moyen entre le classement estimé et le classement réel, sur une échelle de 0 à 1. "
-            "Plus elle est faible, plus l'estimation est précise.</div>",
+            "<div class='plain-note'><b>MAE is the primary measure.</b> It is the average gap between the estimated and actual rankings, on a 0-to-1 scale. "
+            "The lower it is, the more accurate the estimate.</div>",
             unsafe_allow_html=True,
         )
-        st.markdown("#### Comment l'évaluation évite les raccourcis")
+        st.markdown("#### How the evaluation avoids shortcuts")
         st.markdown(
-            "1. Tous les joueurs d'une même partie restent ensemble pendant la validation.  \n"
-            "2. Cinq groupes de validation servent à comparer les configurations.  \n"
-            "3. Des parties gardées à l'écart vérifient ensuite le résultat final."
+            "1. All players from the same match remain together during validation.  \n"
+            "2. Five validation groups compare the configurations.  \n"
+            "3. Held-out matches then verify the final result."
         )
-        with st.expander("Voir l'étude qui justifie le choix de cinq groupes de validation"):
+        with st.expander("View the study supporting five validation groups"):
             fold_figure = _artifact_figure("07c_fold_count_sensitivity.png")
             if fold_figure is not None:
                 st.image(str(fold_figure), width="stretch")
@@ -473,12 +469,12 @@ def _render_model_overview() -> None:
             if fold_table is not None:
                 st.dataframe(fold_table, width="stretch", hide_index=True)
             st.caption(
-                "Cinq groupes ont été retenus : le gain observé avec davantage de groupes est trop faible au regard du temps de calcul supplémentaire."
+                "Five groups were selected: the observed gain from more groups is too small relative to the additional computation time."
             )
     with tabs[1]:
         st.markdown(
-            "<div class='plain-note'><b>Une explication, pas une preuve de causalité.</b> L'analyse ci-dessous montre comment les variables ont fait varier les estimations de CatBoost. "
-            "Elle ne dit pas qu'une action provoque mécaniquement le résultat.</div>",
+            "<div class='plain-note'><b>An explanation, not proof of causality.</b> The analysis below shows how variables change CatBoost estimates. "
+            "It does not mean that an action mechanically causes the outcome.</div>",
             unsafe_allow_html=True,
         )
         figure = _artifact_figure("13_catboost_shap_summary.png")
@@ -488,18 +484,18 @@ def _render_model_overview() -> None:
             if figure is not None:
                 st.image(str(figure), width="stretch")
         with right:
-            st.markdown("#### Lire ce graphique")
+            st.markdown("#### Reading this chart")
             st.markdown(
-                "- Chaque point représente un joueur analysé.\n"
-                "- À droite, la statistique pousse le classement estimé vers le haut.\n"
-                "- À gauche, elle le pousse vers le bas.\n"
-                "- La couleur indique une valeur faible ou élevée pour cette statistique."
+                "- Each point represents an analyzed player.\n"
+                "- On the right, the statistic pushes the estimated ranking upward.\n"
+                "- On the left, it pushes the estimate downward.\n"
+                "- Color indicates a low or high value for that statistic."
             )
             st.warning(
-                "`killRank` est très informatif, mais il est connu après la partie. Le modèle décrit donc un usage post-match, pas une prédiction en direct."
+                "`killRank` is highly informative, but it is known after the match. The model therefore describes a post-match use case, not live prediction."
             )
         if importance is not None:
-            with st.expander("Voir le classement détaillé des statistiques"):
+            with st.expander("View the detailed feature ranking"):
                 st.dataframe(
                     importance.head(12).style.format(
                         {
@@ -521,11 +517,11 @@ def _evaluate_candidate(
     active_model = st.session_state.get("active_model_result")
     if active_model is not None:
         baseline_metrics = active_model["holdout_metrics"]
-        baseline_label = "le modèle actif de cette session"
+        baseline_label = "the active model for this session"
     else:
         try:
             baseline_metrics = evaluate_reference_on_uploaded_data(train, ARTIFACT_DIR)
-            baseline_label = "le modèle de référence"
+            baseline_label = "the reference model"
         except Exception as error:
             result["promotion_error"] = str(error)
             return result
@@ -547,22 +543,22 @@ def _adopt_candidate(result: dict[str, object]) -> None:
 
 def _render_training_result(result: dict[str, object]) -> None:
     st.markdown(
-        "<div class='section-title'>Résultat de votre configuration</div>", unsafe_allow_html=True
+        "<div class='section-title'>Your configuration result</div>", unsafe_allow_html=True
     )
     summary = result["cv_summary"]
     holdout = result["holdout_metrics"]
     cards = st.columns(4)
-    cards[0].metric("Erreur moyenne sur validation", _number(float(summary["mae"]), 5))
-    cards[1].metric("Variabilité entre groupes", _number(float(summary["mae_std"]), 5))
-    cards[2].metric("Erreur sur contrôle final", _number(float(holdout["mae"]), 5))
-    cards[3].metric("Qualité globale (R²)", _number(float(holdout["r2"]), 3))
+    cards[0].metric("Validation mean error", _number(float(summary["mae"]), 5))
+    cards[1].metric("Variation across groups", _number(float(summary["mae_std"]), 5))
+    cards[2].metric("Final holdout error", _number(float(holdout["mae"]), 5))
+    cards[3].metric("Overall fit (R²)", _number(float(holdout["r2"]), 3))
     st.caption(
-        f"Configuration évaluée sur {_format_count(result['development_rows'])} lignes, puis contrôlée sur "
-        f"{_format_count(result['holdout_rows'])} lignes de parties distinctes."
+        f"Configuration evaluated on {_format_count(result['development_rows'])} rows, then checked on "
+        f"{_format_count(result['holdout_rows'])} rows from separate matches."
     )
     if "promotion_error" in result:
         st.warning(
-            "Le candidat a été évalué, mais le modèle de référence n'a pas pu être comparé sur ces fichiers : "
+            "The candidate was evaluated, but the reference model could not be compared on these files: "
             f"{result['promotion_error']}"
         )
     elif "baseline_metrics" in result:
@@ -570,33 +566,33 @@ def _render_training_result(result: dict[str, object]) -> None:
         improvement = float(result["mae_improvement"])
         comparison = st.columns(3)
         comparison[0].metric(
-            "MAE du candidat",
+            "Candidate MAE",
             _number(float(holdout["mae"]), 5),
         )
         comparison[1].metric(
-            "MAE de comparaison",
+            "Comparison MAE",
             _number(float(baseline["mae"]), 5),
         )
-        comparison[2].metric("Gain de MAE", _number(improvement, 5))
+        comparison[2].metric("MAE improvement", _number(improvement, 5))
         if result["eligible_for_promotion"]:
             st.success(
-                f"Ce candidat est meilleur que {result['baseline_label']} sur le même contrôle final."
+                f"This candidate performs better than {result['baseline_label']} on the same final holdout."
             )
             st.button(
-                "Adopter ce modèle pour cette session",
+                "Adopt this model for this session",
                 type="primary",
                 on_click=_adopt_candidate,
                 args=(result,),
             )
             st.caption(
-                "Une fois adopté, il remplace le modèle précédent pour toutes les prédictions de cette session."
+                "Once adopted, it replaces the previous model for every prediction in this session."
             )
         else:
             st.info(
-                f"Ce candidat ne fait pas mieux que {result['baseline_label']} sur le même contrôle. "
-                "Le modèle actif n'est donc pas remplacé."
+                f"This candidate does not outperform {result['baseline_label']} on the same holdout. "
+                "The active model is therefore not replaced."
             )
-    with st.expander("Voir le détail par groupe de validation"):
+    with st.expander("View validation-group details"):
         st.dataframe(result["fold_details"], width="stretch", hide_index=True)
     export = BytesIO()
     joblib.dump(
@@ -610,7 +606,7 @@ def _render_training_result(result: dict[str, object]) -> None:
         export,
     )
     st.download_button(
-        "Télécharger ce modèle entraîné",
+        "Download this trained model",
         data=export.getvalue(),
         file_name="game_player_catboost_session.joblib",
         mime="application/octet-stream",
@@ -619,14 +615,14 @@ def _render_training_result(result: dict[str, object]) -> None:
 
 def _render_tuning_controls(train: pd.DataFrame) -> None:
     st.caption(
-        "Cette option est volontairement limitée : elle teste uniquement CatBoost et n'adopte une variante que si sa MAE est meilleure sur le même contrôle final."
+        "This option is intentionally limited: it tests only CatBoost and adopts a variant only when its MAE is better on the same final holdout."
     )
     mode = st.radio(
-        "Comment souhaitez-vous procéder ?",
-        ("Évaluer une configuration", "Chercher parmi quelques configurations"),
+        "How would you like to proceed?",
+        ("Evaluate one configuration", "Search a few configurations"),
         horizontal=True,
     )
-    if mode == "Évaluer une configuration":
+    if mode == "Evaluate one configuration":
         with st.form("manual_catboost"):
             fields = st.columns(3)
             parameters: dict[str, int | float] = {}
@@ -636,29 +632,29 @@ def _render_tuning_controls(train: pd.DataFrame) -> None:
                     options,
                     index=min(1, len(options) - 1),
                 )
-            submitted = st.form_submit_button("Évaluer cette configuration", type="primary")
+            submitted = st.form_submit_button("Evaluate this configuration", type="primary")
         if submitted:
-            with st.spinner("Évaluation en cours sur des parties distinctes…"):
+            with st.spinner("Evaluating on separate matches…"):
                 result = _evaluate_candidate(train, parameters)
             st.session_state["session_model_result"] = result
             st.success(
-                "Configuration évaluée. Le résultat est comparé au modèle actuellement actif."
+                "Configuration evaluated. The result is compared with the currently active model."
             )
     else:
         trials = st.select_slider(
-            "Nombre maximal de configurations à tester", options=(1, 2, 4), value=2
+            "Maximum number of configurations to test", options=(1, 2, 4), value=2
         )
-        if st.button("Lancer la recherche limitée", type="primary"):
-            with st.spinner("Recherche et évaluation en cours…"):
+        if st.button("Run the limited search", type="primary"):
+            with st.spinner("Searching and evaluating…"):
                 search, parameters = search_uploaded_catboost(train, n_trials=trials)
                 result = _evaluate_candidate(train, parameters)
             st.session_state["session_model_result"] = result
             st.session_state["session_search"] = search
             st.success(
-                "La meilleure configuration trouvée a été contrôlée et comparée au modèle actif."
+                "The best configuration found was checked and compared with the active model."
             )
     if "session_search" in st.session_state:
-        with st.expander("Voir les configurations comparées"):
+        with st.expander("View the compared configurations"):
             st.dataframe(st.session_state["session_search"], width="stretch", hide_index=True)
     result = st.session_state.get("session_model_result")
     if result is not None:
@@ -667,33 +663,29 @@ def _render_tuning_controls(train: pd.DataFrame) -> None:
 
 def _render_predictions() -> None:
     _page_heading(
-        "Étape 4 · Prédictions",
-        "Créez votre fichier de prédictions.",
-        "Utilisez le modèle de référence ou une variante que vous avez évaluée. Le résultat est un CSV prêt à être téléchargé.",
+        "Step 4 · Predictions",
+        "Create your prediction file.",
+        "Use the reference model or a variant you evaluated. The result is a CSV ready to download.",
     )
     test = st.session_state.get("private_test")
     if test is None:
         st.markdown(
-            "<div class='plain-note'><b>Il manque le fichier test.</b> Ajoutez un CSV sans la colonne "
-            "<code>winRankPercentage</code> dans l'étape 1, puis revenez ici.</div>",
+            "<div class='plain-note'><b>The test file is missing.</b> Add a CSV without the "
+            "<code>winRankPercentage</code> column in step 1, then return here.</div>",
             unsafe_allow_html=True,
         )
         st.button(
-            "Ajouter mon fichier test",
+            "Add my test file",
             on_click=_navigate_to,
-            args=("1 · Fichiers",),
+            args=("1 · Files",),
         )
     else:
         selected_model = st.session_state.get("active_model_result")
-        source = (
-            "votre modèle adopté dans cette session" if selected_model else "le modèle de référence"
-        )
-        st.success(
-            f"Fichier test chargé : {_format_count(len(test))} lignes. Source utilisée : {source}."
-        )
-        if st.button("Créer les prédictions", type="primary"):
+        source = "your adopted model for this session" if selected_model else "the reference model"
+        st.success(f"Test file loaded: {_format_count(len(test))} rows. Source used: {source}.")
+        if st.button("Create predictions", type="primary"):
             try:
-                with st.spinner("Création des prédictions…"):
+                with st.spinner("Creating predictions…"):
                     if selected_model:
                         submission = predict_uploaded_test(
                             test,
@@ -703,15 +695,15 @@ def _render_predictions() -> None:
                     else:
                         submission = predict_frame(test, ARTIFACT_DIR / "model.joblib")
                 st.session_state["session_submission"] = submission
-                st.success(f"{_format_count(len(submission))} prédictions valides ont été créées.")
+                st.success(f"{_format_count(len(submission))} valid predictions were created.")
             except Exception as error:
-                st.error(f"Prédiction impossible : {error}")
+                st.error(f"Prediction failed: {error}")
         submission = st.session_state.get("session_submission")
         if submission is not None:
-            with st.expander("Prévisualiser les 20 premières prédictions"):
+            with st.expander("Preview the first 20 predictions"):
                 st.dataframe(submission.head(20), width="stretch", hide_index=True)
             st.download_button(
-                "Télécharger le CSV de prédictions",
+                "Download the prediction CSV",
                 data=submission.to_csv(index=False).encode("utf-8"),
                 file_name="game_player_submission.csv",
                 mime="text/csv",
@@ -719,9 +711,9 @@ def _render_predictions() -> None:
             )
 
     st.markdown(
-        "<div class='section-title'>Ajuster le modèle — facultatif</div>", unsafe_allow_html=True
+        "<div class='section-title'>Tune the model — optional</div>", unsafe_allow_html=True
     )
-    with st.expander("Je souhaite tester une variante de CatBoost"):
+    with st.expander("I want to test a CatBoost variant"):
         train = _require_train()
         if train is not None:
             _render_tuning_controls(train)
@@ -729,27 +721,27 @@ def _render_predictions() -> None:
 
 def _render_sidebar() -> None:
     with st.sidebar:
-        st.markdown("### Votre session")
+        st.markdown("### Your session")
         train = st.session_state.get("private_train")
         test = st.session_state.get("private_test")
-        st.caption("Les fichiers ne sont pas enregistrés.")
+        st.caption("Files are not stored.")
         if train is None:
-            st.info("Fichier d'entraînement non ajouté")
+            st.info("Training file not added")
         else:
-            st.success(f"Entraînement : {_format_count(len(train))} lignes")
+            st.success(f"Training: {_format_count(len(train))} rows")
         if test is None:
-            st.info("Fichier test non ajouté")
+            st.info("Test file not added")
         else:
-            st.success(f"Test : {_format_count(len(test))} lignes")
+            st.success(f"Test: {_format_count(len(test))} rows")
         if st.session_state.get("active_model_result") is not None:
-            st.success("Variante CatBoost adoptée")
+            st.success("CatBoost variant adopted")
         st.divider()
-        st.markdown("#### Ce que fait l'application")
+        st.markdown("#### What the application does")
         st.caption(
-            "• analyse les fichiers en mémoire\n\n"
-            "• sépare les parties pour contrôler le modèle\n\n"
-            "• limite les réglages avancés\n\n"
-            "• ne contacte aucune API externe"
+            "• analyzes files in memory\n\n"
+            "• keeps matches separate to evaluate the model\n\n"
+            "• limits advanced tuning\n\n"
+            "• contacts no external API"
         )
 
 
@@ -758,7 +750,7 @@ def main() -> None:
     _render_sidebar()
     st.markdown(
         "<div class='brand'><span class='brand-mark'>🎮</span><span class='brand-name'>Game Player Analysis</span>"
-        "<span class='topline'>Projet Data Science · Analyse post-match</span></div>",
+        "<span class='topline'>Data Science project · Post-match analysis</span></div>",
         unsafe_allow_html=True,
     )
     page = st.radio(
@@ -770,11 +762,11 @@ def main() -> None:
     )
     st.divider()
     pages = {
-        "Découvrir": _render_home,
-        "1 · Fichiers": _render_uploads,
+        "Discover": _render_home,
+        "1 · Files": _render_uploads,
         "2 · Explorer": _render_exploration,
-        "3 · Modèle": _render_model_overview,
-        "4 · Prédictions": _render_predictions,
+        "3 · Model": _render_model_overview,
+        "4 · Predictions": _render_predictions,
     }
     pages[page]()
 

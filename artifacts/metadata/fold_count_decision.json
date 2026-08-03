@@ -2,10 +2,10 @@
   "evidence": {
     "catboost_wins_every_fold_for_every_k": true,
     "five_fold_validation_rows": 8025.6,
-    "seven_fold_cost_relative_to_five": 1.5777511363869607,
+    "seven_fold_cost_relative_to_five": 0.8336612846617938,
     "seven_fold_nominal_mae_gain_vs_five": 0.0001887876706737901,
     "ten_fold_catboost_mae_std": 0.0013544710662566981,
-    "ten_fold_cost_relative_to_five": 2.14224344787041
+    "ten_fold_cost_relative_to_five": 2.4161978885308706
   },
   "fold_counts_checked": [
     3,

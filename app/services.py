@@ -91,7 +91,7 @@ def evaluate_uploaded_catboost(
     folds = make_group_folds(development)
     candidate = build_catboost(parameters)
     summary, _, fold_details = cross_validate_model(
-        "CatBoost configuration utilisateur",
+        "User CatBoost configuration",
         candidate,
         development_features,
         development_target,

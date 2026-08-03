@@ -26,24 +26,23 @@ FEATURE_SOURCES = (
 FEATURE_RATIONALE = {
     "walk_distance_per_match_minute": (
         "walkDist / (gameTime / 60)",
-        "Normalise la mobilité par la durée globale du match, "
-        "sans prétendre mesurer le temps de survie.",
+        "Normalizes mobility by total match duration without claiming to measure " "survival time.",
     ),
     "damage_per_kill": (
-        "damages / kills si kills > 0, sinon 0",
-        "Distingue dégâts et conversion en éliminations; damages brut reste présent.",
+        "damages / kills when kills > 0, otherwise 0",
+        "Separates damage from kill conversion while retaining raw damages.",
     ),
     "combat_activity": (
         "kills + assists + knocks",
-        "Résume le volume d'engagement offensif.",
+        "Summarizes offensive engagement volume.",
     ),
     "resource_activity": (
         "weapons + upgrades + heals",
-        "Résume collecte et progression sans faux rythme individuel.",
+        "Summarizes looting and progression without implying an individual pace.",
     ),
     "mode_solo / mode_duo / mode_squad": (
-        "famille extraite de gameType",
-        "Encode le contexte principal; les modes spéciaux forment la référence.",
+        "family derived from gameType",
+        "Encodes the main context; special modes are the reference category.",
     ),
 }
 
